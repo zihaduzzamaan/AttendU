@@ -33,32 +33,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   // Sync profile and metadata
-  const syncProfile = async (sessionUser: any) => {
+  const syncProfile = async (sessionUser: any, retryCount = 0): Promise<boolean> => {
     try {
-      const profilePromise = supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', sessionUser.id)
-        .single();
+      console.log(`Syncing profile for ${sessionUser.email} (Attempt ${retryCount + 1})...`);
 
       const { data: profile, error } = (await withTimeout(
-        profilePromise,
+        supabase.from('profiles').select('*').eq('id', sessionUser.id).maybeSingle(),
         10000,
         "Profile fetch delayed (10s)"
       )) as any;
 
       if (error || !profile) {
-        console.warn("Could not fetch profile during sync:", error?.message);
-        return;
+        // If it's a new signup, it might take a second for the profile record to appear
+        if (retryCount < 2) {
+          console.log("Profile not found yet, retrying in 2 seconds...");
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          return await syncProfile(sessionUser, retryCount + 1);
+        }
+        console.warn("Could not fetch profile during sync:", error?.message || "Profile not found after retries");
+        return false;
       }
 
       let extraData = {};
       try {
         if (profile.role === 'teacher') {
-          const teacher = await withTimeout(api.getTeacherByProfileId(profile.id), 4000, "Teacher sync timeout");
+          const teacher = await withTimeout(api.getTeacherByProfileId(profile.id), 5000, "Teacher sync timeout");
           if (teacher) extraData = { teacher_id: teacher.id };
         } else if (profile.role === 'student') {
-          const student = await withTimeout(api.getStudentByProfileId(profile.id), 4000, "Student sync timeout");
+          const student = await withTimeout(api.getStudentByProfileId(profile.id), 5000, "Student sync timeout");
           if (student) extraData = { student_id: student.id };
         }
       } catch (metaErr) {
@@ -68,8 +70,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser({ ...sessionUser, ...profile, ...extraData });
       setRole(profile.role as UserRole);
       setIsAuthenticated(true);
+      return true;
     } catch (err) {
-      console.warn("⚠️ Profile sync delayed or failed (non-critical):", err);
+      console.warn("⚠️ Profile sync delayed or failed:", err);
+      return false;
     }
   };
 
@@ -144,7 +148,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (error) return { success: false, error: error.message };
 
       if (data.user) {
-        await syncProfile(data.user);
+        const synced = await syncProfile(data.user);
+        if (!synced) {
+          return { success: false, error: "Authenticated, but could not sync your profile data. Please refresh and try again." };
+        }
       }
       return { success: true };
     } catch (error: any) {
@@ -166,17 +173,85 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       };
 
-      const { data: authData, error } = await withTimeout(
+      // 1. Register in Supabase Auth
+      const { data: authData, error: authError } = await withTimeout(
         supabase.auth.signUp(signupOptions),
         15000,
         "Signup attempt timed out (15s)"
       );
 
-      if (error) return { success: false, error: error.message };
+      if (authError) return { success: false, error: authError.message };
       if (!authData.user) return { success: false, error: 'Signup failed' };
 
-      return { success: true, userId: authData.user.id };
+      const userId = authData.user.id;
+
+      // 2. Create Profile Record
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .insert([{
+          id: userId,
+          email: data.email,
+          name: data.name,
+          role: data.role
+        }]);
+
+      if (profileError) {
+        console.error("Profile creation failed:", profileError);
+        return { success: false, error: `Auth success, but profile creation failed: ${profileError.message}` };
+      }
+
+      // 3. Create Role-Specific Records
+      if (data.role === 'student') {
+        const { error: studentError } = await supabase
+          .from('students')
+          .insert([{
+            profile_id: userId,
+            student_id: data.studentId, // Roll No
+            section_id: data.section_id,
+            is_active: true
+          }]);
+
+        if (studentError) {
+          console.error("Student record creation failed:", studentError);
+          return { success: false, error: `Student data error: ${studentError.message}` };
+        }
+      } else if (data.role === 'teacher') {
+        const { data: teacherData, error: teacherError } = await supabase
+          .from('teachers')
+          .insert([{
+            profile_id: userId,
+            faculty_id: data.facultyId,
+            is_active: true
+          }])
+          .select()
+          .single();
+
+        if (teacherError) {
+          console.error("Teacher record creation failed:", teacherError);
+          return { success: false, error: `Teacher data error: ${teacherError.message}` };
+        }
+
+        // 4. Create Teacher Assignments if provided
+        if (data.assignments && data.assignments.length > 0) {
+          const assignments = data.assignments.map((a: any) => ({
+            teacher_id: teacherData.id,
+            subject_id: a.subjectId
+          }));
+
+          const { error: assignError } = await supabase
+            .from('teacher_assignments')
+            .insert(assignments);
+
+          if (assignError) {
+            console.warn("Teacher assignments failed:", assignError);
+            // Non-critical: we continue even if assignments fail, user can add them later
+          }
+        }
+      }
+
+      return { success: true, userId };
     } catch (error: any) {
+      console.error("Signup process exception:", error);
       return { success: false, error: error.message };
     }
   };
