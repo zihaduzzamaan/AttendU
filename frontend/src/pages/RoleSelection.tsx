@@ -1,5 +1,5 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import {
@@ -21,8 +21,17 @@ import { UserCircle2 } from 'lucide-react';
 
 const RoleSelection = () => {
   const navigate = useNavigate();
-  const { setSelectedRole } = useAuth();
+  const { setSelectedRole, isAuthenticated, role: userRole } = useAuth();
   const [role, setRole] = useState<string>("");
+
+  // Effect: Auto-redirect if already logged in
+  useEffect(() => {
+    if (isAuthenticated && userRole) {
+      if (userRole === 'admin') navigate('/admin/dashboard', { replace: true });
+      else if (userRole === 'teacher') navigate('/teacher/dashboard', { replace: true });
+      else if (userRole === 'student') navigate('/student/attendance', { replace: true });
+    }
+  }, [isAuthenticated, userRole, navigate]);
 
   const handleContinue = () => {
     if (!role) return;

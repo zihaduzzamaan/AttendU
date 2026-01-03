@@ -91,20 +91,23 @@ class FaceLogic:
             # Extract face region
             face_roi = image_np[y:y+h, x:x+w]
             
-            # Resize to small thumbnail (11x11) for structural comparison
-            # 11x11 = 121 pixels, which fits within our 128-d vector limit
-            face_small = cv2.resize(face_roi, (11, 11))
+            # Convert to grayscale for structural embedding
+            face_roi_gray = cv2.cvtColor(face_roi, cv2.COLOR_RGB2GRAY)
             
-            # Flatten to create a vector
+            # Resize to small thumbnail (11x11) 
+            # 11x11 = 121 pixels
+            face_small = cv2.resize(face_roi_gray, (11, 11))
+            
+            # Flatten to create a vector (121 elements)
             embedding = face_small.flatten().astype(float)
             
-            # Pad to 128 dimensions
+            # Pad to 128 dimensions to match DB schema and previous logic
             if len(embedding) < 128:
                 embedding = np.pad(embedding, (0, 128 - len(embedding)))
             
             embedding = embedding / (np.linalg.norm(embedding) + 1e-8)  # Normalize
             
-            print(f"✅ Extracted 128-d embedding (structural 11x11)")
+            print(f"✅ Extracted 128-d grayscale embedding (structural 11x11 padded)")
             return embedding
         
         except Exception as e:
@@ -146,10 +149,14 @@ class FaceLogic:
                 # Extract face region
                 face_roi = image_np[y:y+h, x:x+w]
                 
-                # Structural embedding (11x11)
-                face_small = cv2.resize(face_roi, (11, 11))
+                # Convert to grayscale
+                face_roi_gray = cv2.cvtColor(face_roi, cv2.COLOR_RGB2GRAY)
+                
+                # Structural embedding (11x11 = 121 elements)
+                face_small = cv2.resize(face_roi_gray, (11, 11))
                 embedding = face_small.flatten().astype(float)
                 
+                # Pad to 128 dimensions
                 if len(embedding) < 128:
                     embedding = np.pad(embedding, (0, 128 - len(embedding)))
                     

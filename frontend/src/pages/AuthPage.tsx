@@ -22,7 +22,7 @@ const AuthPage = () => {
   const [isLoading, setIsLoading] = useState(false); // Used for form submissions
   const [isDataLoading, setIsDataLoading] = useState(false); // Used for background data fetch
 
-  // Registration Data
+  const [lastError, setLastError] = useState<string | null>(null);
   const [faculties, setFaculties] = useState<any[]>([]);
   const [batches, setBatches] = useState<any[]>([]);
   const [sections, setSections] = useState<any[]>([]);
@@ -53,6 +53,7 @@ const AuthPage = () => {
   useEffect(() => {
     const loadData = async () => {
       setIsDataLoading(true);
+      setLastError(null);
       try {
         console.log('🔄 Attempting to load registration data...');
         const [f, b, s, sub] = await Promise.all([
@@ -76,16 +77,8 @@ const AuthPage = () => {
       } catch (e: any) {
         console.group('❌ Registration data load failed');
         console.error('Error Object:', e);
-        console.error('Message:', e.message);
-        console.error('Details:', e.details);
-        console.error('Hint:', e.hint);
+        setLastError(e.message || "Network Error");
         console.groupEnd();
-
-        toast({
-          title: 'Error loading data',
-          description: e.message || 'Check browser console for details.',
-          variant: 'destructive'
-        });
       } finally {
         setIsDataLoading(false);
       }
@@ -95,62 +88,30 @@ const AuthPage = () => {
 
   const manualTest = async () => {
     console.log('🧪 Running manual connection test...');
-    const result = await supabase.from('faculties').select('*');
-    console.log('🧪 Raw Result:', result);
-    if (result.error) toast({ title: 'Test Failed', description: result.error.message, variant: 'destructive' });
-    else toast({ title: 'Test Success', description: `Found ${result.data?.length} faculties` });
-
-    // Test Auth endpoint connectivity
-    console.log('🧪 Testing Auth Connection...');
+    setIsDataLoading(true);
+    setLastError(null);
     try {
-      const authUrl = `${import.meta.env.VITE_SUPABASE_URL}/auth/v1/health`;
-      console.log('🔗 1. Pinging Health:', authUrl);
-      const ping: any = await Promise.race([
-        fetch(authUrl),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('Health ping timeout')), 5000))
-      ]).catch(err => ({ ok: false, status: 0, statusText: err.message }));
-
-      console.log('🔗 Health Result:', ping.status, ping.ok ? 'OK' : 'FAIL', ping.statusText || '');
-
-      const tokenUrl = `${import.meta.env.VITE_SUPABASE_URL}/auth/v1/token?grant_type=password`;
-      console.log('🔗 2. Testing POST (Direct Token API):', tokenUrl);
-      const postTest: any = await Promise.race([
-        fetch(tokenUrl, {
-          method: 'POST',
-          headers: { 'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: 'test@ping.com', password: 'ping' })
-        }),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('POST test timeout')), 5000))
-      ]).catch(err => ({ ok: false, status: 0, statusText: err.message }));
-
-      console.log('🔗 POST Result:', postTest.status, postTest.statusText || '');
-
-      const { data, error: authErr } = await supabase.auth.getSession().catch(err => ({ data: null, error: err }));
-      console.log('🔗 Client Session Check:', authErr ? 'ERROR' : 'OK', authErr?.message || '');
-
-      if (ping.ok || postTest.status === 400 || postTest.status === 401) {
-        toast({ title: 'Network OK', description: 'Supabase Auth is reachable.' });
+      const result = await supabase.from('faculties').select('*').limit(1);
+      console.log('🧪 Raw Result:', result);
+      if (result.error) {
+        setLastError(result.error.message);
+        toast({ title: 'Test Failed', description: result.error.message, variant: 'destructive' });
       } else {
-        const reason = postTest.status === 0 ? "Network Blocked/Timeout" : `Error ${postTest.status}`;
-        toast({
-          title: 'Connection Issue',
-          description: `Direct check failed (${reason}). Your project might be paused or internet restricted.`,
-          variant: 'destructive'
-        });
+        toast({ title: 'Test Success', description: `Found ${result.data?.length} faculties` });
+        // Reload everything
+        const [f, b, s, sub] = await Promise.all([
+          api.getFaculties().catch(() => []),
+          api.getBatches().catch(() => []),
+          api.getSections().catch(() => []),
+          api.getSubjects().catch(() => [])
+        ]);
+        setFaculties(f); setBatches(b); setSections(s); setSubjects(sub);
       }
     } catch (e: any) {
-      console.error('❌ Deep Test Failed:', e);
-      toast({ title: 'System Error', description: e.message, variant: 'destructive' });
+      setLastError(e.message);
+    } finally {
+      setIsDataLoading(false);
     }
-
-    // Also try to reload the full data
-    const [f, b, s, sub] = await Promise.all([
-      api.getFaculties().catch(() => []),
-      api.getBatches().catch(() => []),
-      api.getSections().catch(() => []),
-      api.getSubjects().catch(() => [])
-    ]);
-    setFaculties(f); setBatches(b); setSections(s); setSubjects(sub);
   };
 
   // Redirect if no role selected
@@ -196,7 +157,9 @@ const AuthPage = () => {
         });
       }
     } catch (error: any) {
-      console.error('🔑 Login exception:', error);
+      console.group('🔑 Login exception:');
+      console.error(error);
+      console.groupEnd();
       toast({
         title: 'Login error',
         description: error.message || 'An unexpected error occurred',
@@ -337,27 +300,6 @@ const AuthPage = () => {
 
   return (
     <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4">
-      {/* Debug Info (Only visible if you know where to look, or for now, just visible for troubleshooting) */}
-      <div className="mb-4 p-2 text-[10px] font-mono bg-muted rounded border max-w-md w-full relative">
-        <button
-          onClick={manualTest}
-          className="absolute right-2 top-2 px-2 py-1 bg-primary text-primary-foreground rounded hover:bg-primary/90 text-[8px] uppercase font-bold"
-        >
-          Test Connection
-        </button>
-        <p>Project URL: {import.meta.env.VITE_SUPABASE_URL?.includes('placeholder') ? '⚠️ USING PLACEHOLDER' : (import.meta.env.VITE_SUPABASE_URL || '❌ MISSING')}</p>
-        <p>Key Format: {import.meta.env.VITE_SUPABASE_ANON_KEY?.startsWith('eyJ') ? '✅ Valid (JWT)' : '❌ INVALID'}</p>
-        <p>Network context: {window.location.hostname === 'localhost' ? '✅ Localhost' : '⚠️ Non-localhost (May block Auth)'}</p>
-        <p>Connection: {faculties.length > 0 || batches.length > 0 ? '✅ Connected' : '⚠️ Warning (Check DB)'}</p>
-        <p>Stats: {faculties.length} F, {batches.length} B, {sections.length} S</p>
-        {!isDataLoading && faculties.length === 0 && (
-          <div className="mt-1 text-destructive font-bold uppercase space-y-1">
-            <p>1. Check browser console (F12) for error details.</p>
-            <p>2. Ensure .env has correct keys & restart server.</p>
-          </div>
-        )}
-      </div>
-
       <div className="w-full max-w-md animate-fade-in text-foreground">
         <Button
           variant="ghost"

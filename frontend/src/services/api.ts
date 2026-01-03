@@ -117,9 +117,9 @@ export const api = {
   getTeacherByProfileId: async (profileId: string) => {
     const { data, error } = await supabase
       .from('teachers')
-      .select('*, profile:profiles!profile_id(*)')
+      .select('*')
       .eq('profile_id', profileId)
-      .single();
+      .maybeSingle();
     if (error) throw error;
     return data;
   },
@@ -129,7 +129,7 @@ export const api = {
       .from('students')
       .select('*, section:sections(*, batch:batches(*))')
       .eq('profile_id', profileId)
-      .single();
+      .maybeSingle();
     if (error) throw error;
     return data;
   },
