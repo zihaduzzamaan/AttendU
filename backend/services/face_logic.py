@@ -15,14 +15,31 @@ class FaceLogic:
         
         # Initialize OpenCV face detectors
         self.face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+        if self.face_cascade.empty():
+            print("❌ ERROR: Could not load haarcascade_frontalface_default.xml")
+            
         self.face_cascade_alt = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_alt.xml')
-        
+        if self.face_cascade_alt.empty():
+            print("❌ ERROR: Could not load haarcascade_frontalface_alt.xml")
+            
         print("✅ Face Recognition Service initialized with OpenCV")
         
         # Create debug directory if it doesn't exist
         import os
-        if not os.path.exists("debug_images"):
-            os.makedirs("debug_images")
+        self.debug_dir = "debug_images"
+        try:
+            if not os.path.exists(self.debug_dir):
+                os.makedirs(self.debug_dir)
+        except Exception as e:
+            print(f"⚠️ Warning: Could not create local debug directory: {e}")
+            self.debug_dir = "/tmp/debug_images"
+            try:
+                if not os.path.exists(self.debug_dir):
+                    os.makedirs(self.debug_dir)
+                print(f"✅ Using fallback debug directory: {self.debug_dir}")
+            except Exception as e2:
+                print(f"❌ Error: Could not create fallback debug directory: {e2}")
+                self.debug_dir = None
 
     def get_embedding(self, image_bytes):
         """
@@ -74,9 +91,13 @@ class FaceLogic:
             if len(faces) == 0:
                 print("⚠️ No face detected in image")
                 # Save debug image
-                import time
-                timestamp = int(time.time())
-                cv2.imwrite(f"debug_images/failed_{timestamp}.jpg", cv2.cvtColor(image_np, cv2.COLOR_RGB2BGR))
+                if self.debug_dir:
+                    import time
+                    timestamp = int(time.time())
+                    try:
+                        cv2.imwrite(f"{self.debug_dir}/failed_{timestamp}.jpg", cv2.cvtColor(image_np, cv2.COLOR_RGB2BGR))
+                    except:
+                        pass
                 return None
             
             if len(faces) > 1:

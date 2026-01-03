@@ -17,11 +17,11 @@ interface AuthContextType extends AuthState {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const withTimeout = async <T extends unknown>(promise: Promise<T>, timeoutMs: number, errorMessage: string): Promise<T> => {
+const withTimeout = async <T extends unknown>(promise: Promise<T> | PromiseLike<T>, timeoutMs: number, errorMessage: string): Promise<T> => {
   const timeoutPromise = new Promise<never>((_, reject) =>
     setTimeout(() => reject(new Error(errorMessage)), timeoutMs)
   );
-  return Promise.race([promise, timeoutPromise]);
+  return Promise.race([promise as Promise<T>, timeoutPromise]);
 };
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -41,11 +41,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .eq('id', sessionUser.id)
         .single();
 
-      const { data: profile, error } = await withTimeout(
+      const { data: profile, error } = (await withTimeout(
         profilePromise,
         10000,
         "Profile fetch delayed (10s)"
-      );
+      )) as any;
 
       if (error || !profile) {
         console.warn("Could not fetch profile during sync:", error?.message);

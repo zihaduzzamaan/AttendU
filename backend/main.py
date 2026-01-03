@@ -2,7 +2,37 @@ from fastapi import FastAPI, File, UploadFile, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from typing import List, Optional
 import json
-from services.face_logic import face_service
+import os
+import sys
+
+# Diagnostic logging for Hugging Face
+print(f"📂 Python Version: {sys.version}")
+print(f"📂 Current DIR: {os.getcwd()}")
+print(f"📂 Files in {os.getcwd()}: {os.listdir('.')}")
+
+if os.path.exists('services'):
+    print(f"📂 Files in services/: {os.listdir('services')}")
+else:
+    print("❌ ERROR: 'services' directory not found!")
+
+print(f"📂 sys.path: {sys.path}")
+
+# Add current directory to sys.path to resolve module issues
+if os.getcwd() not in sys.path:
+    sys.path.append(os.getcwd())
+
+try:
+    from services.face_logic import face_service
+    print("✅ Successfully imported face_service")
+except ImportError as e:
+    print(f"❌ CRITICAL IMPORT ERROR: {e}")
+    # Last ditch effort: absolute import
+    try:
+        import services.face_logic
+        face_service = services.face_logic.face_service
+        print("✅ Successfully imported face_service via absolute path")
+    except Exception as e2:
+        print(f"❌ FATAL: Could not resolve services module: {e2}")
 
 app = FastAPI(
     title="Attendance System AI Backend",
@@ -10,20 +40,15 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# CORS Configuration
-origins = [
-    "http://localhost:5173",  # Vite default port
-    "http://localhost:3000",
-    "http://localhost:8081",  # Additional frontend port
-]
-
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=["*"],  # Temporarily allow all for debugging 502/CORS
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+print("🚀 FastAPI App initialized and starting up...")
 
 @app.get("/")
 async def root():
@@ -37,12 +62,6 @@ async def health_check():
 async def register_face(image: UploadFile = File(...)):
     """
     Register a face and return its embedding.
-    
-    Args:
-        image: Image file containing a face
-        
-    Returns:
-        JSON with embedding array (128-d vector) or error
     """
     try:
         # Read image bytes
@@ -79,13 +98,6 @@ async def recognize_faces(
 ):
     """
     Recognize faces in an image against known embeddings.
-    
-    Args:
-        image: Image file (can contain multiple faces)
-        known_embeddings: JSON string of {student_id: embedding} pairs
-        
-    Returns:
-        JSON with list of matched student IDs and their confidence scores
     """
     try:
         # Parse known embeddings
@@ -143,13 +155,6 @@ async def verify_face(
 ):
     """
     Verify if a face in the image matches a known embedding.
-    
-    Args:
-        image: Image file containing a face
-        known_embedding: JSON array of the known face embedding
-        
-    Returns:
-        JSON with match result and confidence
     """
     try:
         # Parse known embedding

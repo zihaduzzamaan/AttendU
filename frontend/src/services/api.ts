@@ -295,7 +295,7 @@ export const api = {
   // Python Backend - Face Recognition API
   // To switch back to local, change this to 'http://localhost:8000'
   registerFaceEmbedding: async (imageBlob: Blob) => {
-    const PYTHON_BACKEND = 'https://attendu-full-app.onrender.com';
+    const PYTHON_BACKEND = 'https://arefintitly-attendu-server.hf.space';
     const TIMEOUT_MS = 60000; // 60s timeout (Render cold starts can take 30-50s)
 
     try {
@@ -331,7 +331,9 @@ export const api = {
   },
 
   recognizeFaces: async (imageBlob: Blob, knownEmbeddings: Record<string, number[]>) => {
-    const PYTHON_BACKEND = 'https://attendu-full-app.onrender.com';
+    // UPDATE THIS URL after creating your Hugging Face Space
+    // Format: https://[username]-[spacename].hf.space
+    const PYTHON_BACKEND = 'https://arefintitly-attendu-server.hf.space';
 
     try {
       const formData = new FormData();
@@ -357,7 +359,7 @@ export const api = {
   },
 
   verifyFace: async (imageBlob: Blob, knownEmbedding: number[]) => {
-    const PYTHON_BACKEND = 'https://attendu-full-app.onrender.com';
+    const PYTHON_BACKEND = 'https://arefintitly-attendu-server.hf.space';
 
     try {
       const formData = new FormData();
