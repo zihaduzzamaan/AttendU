@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
+import { Footer } from '@/components/ui/Footer';
 
 const AdminLogin = () => {
   const navigate = useNavigate();
@@ -17,55 +18,6 @@ const AdminLogin = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [isDataLoading, setIsDataLoading] = useState(false); // For consistency with diagnostics
-
-  const manualTest = async () => {
-    console.log('🧪 Running manual connection test (Admin)...');
-    try {
-      const result = await supabase.from('faculties').select('*', { count: 'exact', head: true });
-      if (result.error) toast({ title: 'DB Connection Failed', description: result.error.message, variant: 'destructive' });
-      else toast({ title: 'DB Connection OK', description: 'Database is reachable.' });
-
-      const authUrl = `${import.meta.env.VITE_SUPABASE_URL}/auth/v1/health`;
-      console.log('🔗 1. Pinging Health:', authUrl);
-      const ping: any = await Promise.race([
-        fetch(authUrl),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('Health ping timeout')), 5000))
-      ]).catch(err => ({ ok: false, status: 0, statusText: err.message }));
-
-      console.log('🔗 Health Result:', ping.status, ping.ok ? 'OK' : 'FAIL', ping.statusText || '');
-
-      const tokenUrl = `${import.meta.env.VITE_SUPABASE_URL}/auth/v1/token?grant_type=password`;
-      console.log('🔗 2. Testing POST (Direct Token API):', tokenUrl);
-      const postTest: any = await Promise.race([
-        fetch(tokenUrl, {
-          method: 'POST',
-          headers: { 'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: 'test@ping.com', password: 'ping' })
-        }),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('POST test timeout')), 5000))
-      ]).catch(err => ({ ok: false, status: 0, statusText: err.message }));
-
-      console.log('🔗 POST Result:', postTest.status, postTest.statusText || '');
-
-      const { data, error: authErr } = await supabase.auth.getSession().catch(err => ({ data: null, error: err }));
-      console.log('🔗 Client Session Check:', authErr ? 'ERROR' : 'OK', authErr?.message || '');
-
-      if (ping.ok || postTest.status === 400 || postTest.status === 401) {
-        toast({ title: 'System Reachable', description: 'Network passed deep tests.' });
-      } else {
-        const reason = postTest.status === 0 ? "Network Blocked/Timeout" : `Error ${postTest.status}`;
-        toast({
-          title: 'Connection Issue',
-          description: `Direct check failed (${reason}). Your project might be paused or internet restricted.`,
-          variant: 'destructive'
-        });
-      }
-    } catch (e: any) {
-      console.error('❌ Test failed:', e);
-      toast({ title: 'System Error', description: e.message, variant: 'destructive' });
-    }
-  };
 
   useEffect(() => {
     setSelectedRole('admin');
@@ -80,31 +32,15 @@ const AdminLogin = () => {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    console.log('🔑 Admin login attempt:', email);
-
     try {
       const result = await login(email, password);
-      console.log('🔑 result:', result);
-
       if (result.success) {
-        toast({
-          title: 'Admin login successful',
-          description: 'Welcome, Administrator!',
-        });
+        toast({ title: 'Admin login successful', description: 'Welcome, Administrator!' });
       } else {
-        toast({
-          title: 'Login failed',
-          description: result.error,
-          variant: 'destructive',
-        });
+        toast({ title: 'Login failed', description: result.error, variant: 'destructive' });
       }
     } catch (error: any) {
-      console.error('❌ Admin login exception:', error);
-      toast({
-        title: 'Unexpected error',
-        description: error.message || 'Check console for details',
-        variant: 'destructive',
-      });
+      toast({ title: 'Unexpected error', description: error.message, variant: 'destructive' });
     } finally {
       setIsLoading(false);
     }
@@ -112,41 +48,27 @@ const AdminLogin = () => {
 
   return (
     <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4">
-      {/* Debug Info */}
-      <div className="mb-4 p-2 text-[10px] font-mono bg-muted rounded border max-w-sm w-full relative">
-        <button
-          onClick={manualTest}
-          className="absolute right-2 top-2 px-2 py-1 bg-destructive text-destructive-foreground rounded hover:bg-destructive/90 text-[8px] uppercase font-bold"
-        >
-          Check API
-        </button>
-        <p>Supabase URL: {import.meta.env.VITE_SUPABASE_URL?.split('//')[1]?.split('.')[0] || 'MISSING'}.supabase.co</p>
-        <p>Key Format: {import.meta.env.VITE_SUPABASE_ANON_KEY?.startsWith('eyJ') ? '✅ Valid' : '❌ INVALID'}</p>
-        <p>Network: {window.location.hostname === 'localhost' ? '✅ Localhost' : '⚠️ Non-localhost'}</p>
-        <p>Status: {isAuthenticated ? 'Authenticated' : 'Not Logged In'}</p>
-      </div>
-
-      <div className="w-full max-w-md animate-fade-in">
+      <div className="flex-1 flex flex-col items-center justify-center w-full max-w-md animate-fade-in">
         <Button
           variant="ghost"
-          className="mb-6"
+          className="self-start mb-6 hover:bg-muted transition-colors"
           onClick={() => navigate('/')}
         >
           <ArrowLeft className="w-4 h-4 mr-2" />
           Back to Home
         </Button>
 
-        <Card className="border-2 border-destructive/20">
-          <CardHeader className="text-center">
-            <div className="w-16 h-16 bg-foreground/10 rounded-lg flex items-center justify-center mx-auto mb-4">
-              <Shield className="w-8 h-8 text-foreground" />
+        <Card className="w-full border-0 shadow-2xl overflow-hidden">
+          <CardHeader className="text-center pb-2">
+            <div className="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-primary/20">
+              <Shield className="w-8 h-8 text-primary" />
             </div>
-            <CardTitle className="text-2xl">Admin Portal</CardTitle>
+            <CardTitle className="text-3xl font-bold tracking-tight">Login as Admin</CardTitle>
             <CardDescription>
               Authorized personnel only
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="pt-6">
             <form onSubmit={handleLogin} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="email">Admin Email</Label>
@@ -157,6 +79,7 @@ const AdminLogin = () => {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
+                  className="h-11"
                 />
               </div>
               <div className="space-y-2">
@@ -169,33 +92,37 @@ const AdminLogin = () => {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
+                    className="h-11"
                   />
                   <Button
                     type="button"
                     variant="ghost"
                     size="sm"
-                    className="absolute right-0 top-0 h-full px-3"
+                    className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
                     onClick={() => setShowPassword(!showPassword)}
                   >
-                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </Button>
                 </div>
               </div>
-              <Button type="submit" className="w-full bg-foreground hover:bg-foreground/90 text-background" disabled={isLoading}>
-                {isLoading ? 'Signing in...' : 'Sign In as Admin'}
+              <Button type="submit" className="w-full h-11 bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg hover:shadow-primary/20 transition-all font-semibold mt-2" disabled={isLoading}>
+                {isLoading ? 'Signing in...' : 'Login as Admin'}
               </Button>
             </form>
 
-            <div className="mt-6 p-3 bg-muted rounded-lg">
-              <p className="text-xs text-muted-foreground text-center">
-                <strong>Demo credentials:</strong><br />
-                Email: admin@university.edu<br />
-                Password: admin123
+            <div className="mt-8 p-4 bg-muted/50 rounded-xl border border-border/50">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 mb-2 text-center">
+                Demo access
               </p>
+              <div className="text-xs text-muted-foreground space-y-1 font-medium">
+                <p className="flex justify-between"><span>Email:</span> <span className="text-foreground">admin@university.edu</span></p>
+                <p className="flex justify-between"><span>Pass:</span> <span className="text-foreground">admin123</span></p>
+              </div>
             </div>
           </CardContent>
         </Card>
       </div>
+      <Footer />
     </div>
   );
 };

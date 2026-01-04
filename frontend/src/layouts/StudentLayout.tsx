@@ -10,6 +10,7 @@ import {
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
+import { Footer } from '@/components/ui/Footer';
 
 const StudentLayout = () => {
     const { logout, user } = useAuth();
@@ -128,8 +129,11 @@ const StudentLayout = () => {
                     </div>
                 </header>
 
-                <div className="p-4 sm:p-6 max-w-7xl mx-auto animate-fade-in">
-                    <Outlet />
+                <div className="p-4 sm:p-6 max-w-7xl mx-auto flex-1 flex flex-col w-full animate-fade-in">
+                    <div className="flex-1">
+                        <Outlet />
+                    </div>
+                    <Footer />
                 </div>
             </main>
         </div>

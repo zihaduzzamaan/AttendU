@@ -18,6 +18,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { UserCircle2 } from 'lucide-react';
+import { Footer } from '@/components/ui/Footer';
 
 const RoleSelection = () => {
   const navigate = useNavigate();
@@ -46,7 +47,7 @@ const RoleSelection = () => {
   };
 
   return (
-    <div className="min-h-screen width-full bg-gradient-to-br from-background via-muted/30 to-background flex items-center justify-center p-4">
+    <div className="min-h-screen w-full bg-gradient-to-br from-background via-muted/30 to-background flex flex-col items-center justify-center p-4">
       <div className="w-full max-w-md animate-fade-in">
         <Card className="border-0 shadow-xl bg-card/50 backdrop-blur-sm ring-1 ring-white/10">
           <CardHeader className="text-center space-y-4 pb-8">
@@ -100,6 +101,7 @@ const RoleSelection = () => {
           University Attendance System v1.0
         </p>
       </div>
+      <Footer />
     </div>
   );
 };

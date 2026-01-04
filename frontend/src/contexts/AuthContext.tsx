@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import { UserRole, AuthState } from '@/types';
 import { supabase } from '@/lib/supabase';
 import { api } from '@/services/api';
+import { GraduationCap } from 'lucide-react';
 
 interface AuthContextType extends AuthState {
   loading: boolean;
@@ -148,6 +149,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (error) return { success: false, error: error.message };
 
       if (data.user) {
+        // Role Validation: Fetch profile BEFORE final login success
+        const { data: profile } = await supabase.from('profiles').select('role').eq('id', data.user.id).maybeSingle();
+
+        if (profile && selectedRole && profile.role !== selectedRole) {
+          // Mismatch! Sign out immediately and return friendly error
+          await supabase.auth.signOut();
+          return {
+            success: false,
+            error: `Access Denied: You are registered as a ${profile.role}. Please log in through the ${profile.role} portal.`
+          };
+        }
+
         const synced = await syncProfile(data.user);
         if (!synced) {
           return { success: false, error: "Authenticated, but could not sync your profile data. Please refresh and try again." };
@@ -159,6 +172,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return { success: false, error: error.message };
     }
   };
+
 
   const signup = async (data: any) => {
     try {
@@ -257,14 +271,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = async () => {
+    // 1. Clear local state immediately for instant UI response
+    setUser(null);
+    setRole(null);
+    setIsAuthenticated(false);
+
+    // 2. Perform background signout
     try {
       await supabase.auth.signOut();
-    } finally {
-      setUser(null);
-      setRole(null);
-      setIsAuthenticated(false);
+    } catch (err) {
+      console.error("Signout error:", err);
     }
   };
+
 
   const completeFaceStore = async (userId: string, embedding?: number[]) => {
     try {
@@ -284,14 +303,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   if (loading) {
-    return (
-      <div className="flex h-screen flex-col items-center justify-center gap-4 bg-background text-foreground">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
-        <p className="font-medium text-lg">Loading Attendance System...</p>
-        <p className="text-muted-foreground text-sm">Please wait while we secure your connection.</p>
-      </div>
-    );
+    return <LoadingScreen />;
   }
+
 
   return (
     <AuthContext.Provider
@@ -314,6 +328,73 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     </AuthContext.Provider>
   );
 }
+
+const LoadingScreen = () => {
+  const [messageIndex, setMessageIndex] = useState(0);
+  const messages = [
+    "Securing your connection...",
+    "Syncing academic records...",
+    "Preparing your dashboard...",
+    "Authenticating credentials...",
+    "Almost there..."
+  ];
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setMessageIndex((prev) => (prev + 1) % messages.length);
+    }, 2500);
+    return () => clearInterval(interval);
+  }, []);
+
+  return (
+    <div className="relative flex h-screen w-full flex-col items-center justify-center overflow-hidden bg-background">
+      {/* Dynamic Animated Blobs Background */}
+      <div className="absolute top-1/4 -left-20 h-72 w-72 animate-blob rounded-full bg-primary/10 blur-3xl filter opacity-70"></div>
+      <div className="absolute top-1/3 -right-20 h-72 w-72 animate-blob animation-delay-2000 rounded-full bg-secondary/10 blur-3xl filter opacity-70"></div>
+      <div className="absolute -bottom-20 left-1/2 h-72 w-72 animate-blob animation-delay-4000 rounded-full bg-primary/5 blur-3xl filter opacity-70"></div>
+
+      <div className="relative z-10 flex flex-col items-center gap-8">
+        {/* Pulsing Logo Container */}
+        <div className="relative">
+          <div className="absolute inset-0 animate-ping rounded-full bg-primary/20"></div>
+          <div className="relative flex h-24 w-24 items-center justify-center rounded-3xl bg-primary shadow-2xl shadow-primary/40 transform transition-transform hover:scale-105 active:scale-95 duration-500">
+            <GraduationCap className="h-12 w-12 text-white" />
+          </div>
+        </div>
+
+        {/* Text Content */}
+        <div className="flex flex-col items-center gap-2 text-center px-6">
+          <h1 className="text-3xl font-bold tracking-tight bg-gradient-to-br from-foreground to-foreground/60 bg-clip-text text-transparent">
+            AttendU
+          </h1>
+          <div className="h-6 flex items-center justify-center">
+            <p className="animate-slide-up text-primary font-medium tracking-wide">
+              {messages[messageIndex]}
+            </p>
+          </div>
+          <p className="mt-2 text-muted-foreground text-sm max-w-[250px] leading-relaxed">
+            Revolutionizing academic tracking with advanced AI.
+          </p>
+        </div>
+
+        {/* Progress Spinner (Subtle) */}
+        <div className="mt-4 flex items-center gap-3 rounded-full bg-muted/50 px-4 py-2 border border-border/50 backdrop-blur-sm">
+          <div className="h-3 w-3 animate-spin rounded-full border-2 border-primary border-t-transparent"></div>
+          <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/80">
+            Initializing System
+          </span>
+        </div>
+      </div>
+
+      {/* Footer Branding */}
+      <div className="absolute bottom-10 left-0 w-full text-center">
+        <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground/40 font-bold">
+          Powered by Advanced Agentic Coding
+        </p>
+      </div>
+    </div>
+  );
+};
 
 export function useAuth() {
   const context = useContext(AuthContext);

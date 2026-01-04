@@ -14,6 +14,7 @@ import {
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
+import { Footer } from '@/components/ui/Footer';
 
 const TeacherLayout = () => {
     const { logout, user } = useAuth();
@@ -119,8 +120,11 @@ const TeacherLayout = () => {
                 </header>
 
                 {/* Page Content */}
-                <main className="flex-1 p-4 sm:p-6 md:p-8 overflow-auto animate-in fade-in duration-500">
-                    <Outlet />
+                <main className="flex-1 flex flex-col p-4 sm:p-6 md:p-8 overflow-auto animate-in fade-in duration-500">
+                    <div className="flex-1">
+                        <Outlet />
+                    </div>
+                    <Footer />
                 </main>
             </div>
         </div>
