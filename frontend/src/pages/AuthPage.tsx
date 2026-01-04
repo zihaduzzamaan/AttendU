@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Eye, EyeOff, Plus, X } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { api } from '@/services/api';
 import { Button } from '@/components/ui/button';
@@ -10,23 +9,23 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/lib/supabase';
+import { Eye, EyeOff } from 'lucide-react';
 
 const AuthPage = () => {
   const navigate = useNavigate();
-  const { selectedRole, setSelectedRole, login, signup, isAuthenticated, role } = useAuth();
+  const { login, signup } = useAuth(); // Removed unused props
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState('login');
   const [showPassword, setShowPassword] = useState(false);
-  const [isLoading, setIsLoading] = useState(false); // Used for form submissions
-  const [isDataLoading, setIsDataLoading] = useState(false); // Used for background data fetch
+  const [isLoading, setIsLoading] = useState(false);
+  const [isDataLoading, setIsDataLoading] = useState(false);
 
   const [lastError, setLastError] = useState<string | null>(null);
   const [faculties, setFaculties] = useState<any[]>([]);
   const [batches, setBatches] = useState<any[]>([]);
   const [sections, setSections] = useState<any[]>([]);
-  const [subjects, setSubjects] = useState<any[]>([]);
+  const [catalogSubjects, setCatalogSubjects] = useState<any[]>([]); // Changed from subjects to catalogSubjects
 
   // Login form state
   const [loginEmail, setLoginEmail] = useState('');
@@ -40,12 +39,14 @@ const AuthPage = () => {
   const [studentBatch, setStudentBatch] = useState('');
   const [studentSection, setStudentSection] = useState('');
   const [studentPassword, setStudentPassword] = useState('');
+  const [studentConfirmPassword, setStudentConfirmPassword] = useState('');
 
   // Teacher signup form state
   const [teacherName, setTeacherName] = useState('');
   const [teacherEmail, setTeacherEmail] = useState('');
   const [teacherFaculty, setTeacherFaculty] = useState('');
   const [teacherPassword, setTeacherPassword] = useState('');
+  const [teacherConfirmPassword, setTeacherConfirmPassword] = useState('');
   const [teacherAssignments, setTeacherAssignments] = useState<{ batchId: string; sectionId: string; subjectId: string }[]>([]);
   const [currentAssignment, setCurrentAssignment] = useState({ batchId: '', sectionId: '', subjectId: '' });
 
@@ -56,24 +57,23 @@ const AuthPage = () => {
       setLastError(null);
       try {
         console.log('🔄 Attempting to load registration data...');
-        const [f, b, s, sub] = await Promise.all([
+        // getSubjects removed, using getCourseCatalog not globally but per request or just init empty
+        // Actually for now we don't need subjects globally loaded. Teacher loads specific to batch.
+        const [f, b, s] = await Promise.all([
           api.getFaculties(),
           api.getBatches(),
           api.getSections(),
-          api.getSubjects()
         ]);
 
         console.log('✅ Diagnostic Load success:', {
           faculties: f.length,
           batches: b.length,
           sections: s.length,
-          url: import.meta.env.VITE_SUPABASE_URL
         });
 
-        setFaculties(f);
-        setBatches(b);
-        setSections(s);
-        setSubjects(sub);
+        setFaculties(f || []);
+        setBatches(b || []);
+        setSections(s || []);
       } catch (e: any) {
         console.group('❌ Registration data load failed');
         console.error('Error Object:', e);
@@ -86,604 +86,284 @@ const AuthPage = () => {
     loadData();
   }, []);
 
-  const manualTest = async () => {
-    console.log('🧪 Running manual connection test...');
-    setIsDataLoading(true);
-    setLastError(null);
-    try {
-      const result = await supabase.from('faculties').select('*').limit(1);
-      console.log('🧪 Raw Result:', result);
-      if (result.error) {
-        setLastError(result.error.message);
-        toast({ title: 'Test Failed', description: result.error.message, variant: 'destructive' });
-      } else {
-        toast({ title: 'Test Success', description: `Found ${result.data?.length} faculties` });
-        // Reload everything
-        const [f, b, s, sub] = await Promise.all([
-          api.getFaculties().catch(() => []),
-          api.getBatches().catch(() => []),
-          api.getSections().catch(() => []),
-          api.getSubjects().catch(() => [])
-        ]);
-        setFaculties(f); setBatches(b); setSections(s); setSubjects(sub);
-      }
-    } catch (e: any) {
-      setLastError(e.message);
-    } finally {
-      setIsDataLoading(false);
-    }
-  };
-
-  // Redirect if no role selected
-  useEffect(() => {
-    if (!selectedRole) {
-      navigate('/');
-    }
-  }, [selectedRole, navigate]);
-
-  // Redirect if already authenticated
-  useEffect(() => {
-    if (isAuthenticated) {
-      if (role === 'student') navigate('/student/attendance');
-      else if (role === 'teacher') navigate('/teacher');
-      else if (role === 'admin') navigate('/admin/dashboard');
-    }
-  }, [isAuthenticated, role, navigate]);
-
-  const handleBack = () => {
-    setSelectedRole(null);
-    navigate('/');
-  };
-
+  // Login Handler
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    console.log('🔑 Attempting login for:', loginEmail);
-
-    try {
-      const result = await login(loginEmail, loginPassword);
-      console.log('🔑 Login result:', result);
-
-      if (result.success) {
-        toast({
-          title: 'Login successful',
-          description: 'Welcome back!',
-        });
-      } else {
-        toast({
-          title: 'Login failed',
-          description: result.error,
-          variant: 'destructive',
-        });
-      }
-    } catch (error: any) {
-      console.group('🔑 Login exception:');
-      console.error(error);
-      console.groupEnd();
-      toast({
-        title: 'Login error',
-        description: error.message || 'An unexpected error occurred',
-        variant: 'destructive',
-      });
-    } finally {
+    const result = await login(loginEmail, loginPassword);
+    if (!result.success) {
+      toast({ title: 'Login Failed', description: result.error, variant: 'destructive' });
       setIsLoading(false);
+    } else {
+      toast({ title: 'Welcome Back!', description: 'Logged in successfully.' });
+      navigate('/admin/dashboard');
     }
   };
 
+  // Student Signup Handler
   const handleStudentSignup = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsLoading(true);
-    console.log('📝 Attempting student signup for:', studentEmail);
 
-    try {
-      const result = await signup({
-        role: 'student',
-        name: studentName,
-        studentId: studentId,
-        email: studentEmail,
-        batchId: studentBatch,
-        section_id: studentSection, // Match DB column name or handle in AuthContext
-        password: studentPassword,
-      });
-      console.log('📝 Signup result:', result);
-
-      if (result.success) {
-        toast({
-          title: 'Account created',
-          description: 'Please complete face registration to activate your account.',
-        });
-        navigate('/face-registration');
-      } else {
-        toast({
-          title: 'Signup failed',
-          description: result.error,
-          variant: 'destructive',
-        });
-      }
-    } catch (error: any) {
-      console.error('📝 Signup exception:', error);
-      toast({
-        title: 'Signup error',
-        description: error.message || 'An unexpected error occurred',
-        variant: 'destructive',
-      });
-    } finally {
-      setIsLoading(false);
+    // Domain Check
+    if (!studentEmail.endsWith('@diu.edu.bd')) {
+      toast({ title: 'Invalid Email Domain', description: 'Students must use a @diu.edu.bd email address.', variant: 'destructive' });
+      return;
     }
-  };
 
-  const handleTeacherSignup = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (teacherAssignments.length === 0) {
-      toast({
-        title: 'No assignments',
-        description: 'Please add at least one teaching assignment.',
-        variant: 'destructive',
-      });
+    // Password Confirmation Check
+    if (studentPassword !== studentConfirmPassword) {
+      toast({ title: 'Passwords do not match', variant: 'destructive' });
       return;
     }
 
     setIsLoading(true);
-
     const result = await signup({
-      role: 'teacher',
-      name: teacherName,
-      email: teacherEmail,
-      facultyId: teacherFaculty,
-      password: teacherPassword,
-      assignments: teacherAssignments.map(a => ({ subjectId: a.subjectId })),
+      email: studentEmail,
+      password: studentPassword,
+      name: studentName,
+      role: 'student',
+      studentId, // Roll Number
+      section_id: studentSection
     });
-
-    if (result.success) {
-      toast({
-        title: 'Account created',
-        description: 'Welcome to the system!',
-      });
-      navigate('/teacher');
+    if (!result.success) {
+      toast({ title: 'Signup Failed', description: result.error, variant: 'destructive' });
+      setIsLoading(false);
     } else {
-      toast({
-        title: 'Signup failed',
-        description: result.error,
-        variant: 'destructive',
-      });
+      toast({ title: 'Account Created', description: 'Please login to continue.' });
+      setActiveTab('login');
+      setIsLoading(false);
+    }
+  };
+
+  // Teacher Signup Handler
+  const handleTeacherSignup = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (teacherPassword !== teacherConfirmPassword) {
+      toast({ title: 'Passwords do not match', variant: 'destructive' });
+      return;
     }
 
-    setIsLoading(false);
+    setIsLoading(true);
+    const result = await signup({
+      email: teacherEmail,
+      password: teacherPassword,
+      name: teacherName,
+      role: 'teacher',
+      facultyId: teacherFaculty,
+      assignments: teacherAssignments // Note: AuthContext needs to handle this or ignore it if broken
+    });
+    if (!result.success) {
+      toast({ title: 'Signup Failed', description: result.error, variant: 'destructive' });
+      setIsLoading(false);
+    } else {
+      toast({ title: 'Account Created', description: 'Please login to continue.' });
+      setActiveTab('login');
+      setIsLoading(false);
+    }
   };
+
+  // Helper filters
+  const getBatchesForFaculty = (facultyId: string) => batches.filter(b => b.faculty_id === facultyId);
+  const getSectionsForBatch = (batchId: string) => sections.filter(s => s.batch_id === batchId);
+
+  // Load Catalog Subjects when Batch selected for Teacher Assignment
+  useEffect(() => {
+    if (currentAssignment.batchId) {
+      const batch = batches.find(b => b.id === currentAssignment.batchId);
+      if (batch) {
+        api.getCourseCatalog(batch.faculty_id, batch.current_semester)
+          .then(data => setCatalogSubjects(data || []))
+          .catch(err => console.error(err));
+      }
+    } else {
+      setCatalogSubjects([]);
+    }
+  }, [currentAssignment.batchId, batches]);
+
 
   const addAssignment = () => {
     if (currentAssignment.batchId && currentAssignment.sectionId && currentAssignment.subjectId) {
-      // Check for duplicates
-      const exists = teacherAssignments.some(
-        a => a.batchId === currentAssignment.batchId &&
-          a.sectionId === currentAssignment.sectionId &&
-          a.subjectId === currentAssignment.subjectId
-      );
-
-      if (exists) {
-        toast({
-          title: 'Duplicate assignment',
-          description: 'This assignment already exists.',
-          variant: 'destructive',
-        });
-        return;
-      }
-
       setTeacherAssignments([...teacherAssignments, currentAssignment]);
       setCurrentAssignment({ batchId: '', sectionId: '', subjectId: '' });
-    } else {
-      toast({
-        title: 'Incomplete assignment',
-        description: 'Please select batch, section, and subject.',
-        variant: 'destructive',
-      });
     }
   };
 
-  const removeAssignment = (index: number) => {
-    setTeacherAssignments(teacherAssignments.filter((_, i) => i !== index));
-  };
-
-  const studentSections = sections.filter(s => s.batch_id === studentBatch);
-  const assignmentSections = sections.filter(s => s.batch_id === currentAssignment.batchId);
-  const assignmentSubjects = subjects.filter(sub => sub.section_id === currentAssignment.sectionId);
-
-  const getAssignmentLabel = (assignment: { batchId: string; sectionId: string; subjectId: string }) => {
-    const batch = batches.find(b => b.id === assignment.batchId);
-    const section = sections.find(s => s.id === assignment.sectionId);
-    const subject = subjects.find(s => s.id === assignment.subjectId);
-    return `${batch?.name} - ${section?.name} - ${subject?.name}`;
-  };
-
-  if (!selectedRole) return null;
-
   return (
-    <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4">
-      <div className="w-full max-w-md animate-fade-in text-foreground">
-        <Button
-          variant="ghost"
-          className="mb-6"
-          onClick={handleBack}
-        >
-          <ArrowLeft className="w-4 h-4 mr-2" />
-          Back to Role Selection
-        </Button>
+    <div className="min-h-screen flex items-center justify-center p-4 bg-gray-50 dark:bg-gray-900">
+      <Card className="w-full max-w-md">
+        <CardHeader>
+          <CardTitle className="text-2xl text-center">Attendance System</CardTitle>
+          <CardDescription className="text-center">
+            Login or create an account to get started
+            {lastError && <div className="text-destructive text-xs mt-2">{lastError}</div>}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Tabs value={activeTab} onValueChange={setActiveTab}>
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="login">Login</TabsTrigger>
+              <TabsTrigger value="signup">Sign Up</TabsTrigger>
+            </TabsList>
 
-        <Card className="border-2">
-          <CardHeader className="text-center">
-            <CardTitle className="text-2xl capitalize">{selectedRole} Portal</CardTitle>
-            <CardDescription>
-              {activeTab === 'login' ? 'Sign in to your account' : 'Create a new account'}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Tabs value={activeTab} onValueChange={setActiveTab}>
-              <TabsList className="grid w-full grid-cols-2 mb-6">
-                <TabsTrigger value="login">Login</TabsTrigger>
-                <TabsTrigger value="signup">Sign Up</TabsTrigger>
-              </TabsList>
-
-              <TabsContent value="login">
-                <form onSubmit={handleLogin} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="email">University Email</Label>
-                    <Input
-                      id="email"
-                      type="email"
-                      placeholder="you@university.edu"
-                      value={loginEmail}
-                      onChange={(e) => setLoginEmail(e.target.value)}
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="password">Password</Label>
-                    <div className="relative">
-                      <Input
-                        id="password"
-                        type={showPassword ? 'text' : 'password'}
-                        placeholder="Enter your password"
-                        value={loginPassword}
-                        onChange={(e) => setLoginPassword(e.target.value)}
-                        required
-                      />
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="absolute right-0 top-0 h-full px-3"
-                        onClick={() => setShowPassword(!showPassword)}
-                      >
-                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                      </Button>
-                    </div>
-                  </div>
-                  <Button type="submit" className="w-full" disabled={isLoading}>
-                    {isLoading ? 'Signing in...' : 'Sign In'}
-                  </Button>
-                </form>
-              </TabsContent>
-
-              <TabsContent value="signup">
-                {selectedRole === 'student' ? (
-                  <form onSubmit={handleStudentSignup} className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="name">Full Name</Label>
-                      <Input
-                        id="name"
-                        placeholder="John Smith"
-                        value={studentName}
-                        onChange={(e) => setStudentName(e.target.value)}
-                        required
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="studentId">Student ID</Label>
-                      <Input
-                        id="studentId"
-                        placeholder="STU2024001"
-                        value={studentId}
-                        onChange={(e) => setStudentId(e.target.value)}
-                        required
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="signupEmail">University Email</Label>
-                      <Input
-                        id="signupEmail"
-                        type="email"
-                        placeholder="you@university.edu"
-                        value={studentEmail}
-                        onChange={(e) => setStudentEmail(e.target.value)}
-                        required
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Faculty / Department</Label>
-                      <Select value={studentFaculty} onValueChange={(v) => { setStudentFaculty(v); setStudentBatch(''); setStudentSection(''); }} required>
-                        <SelectTrigger>
-                          <SelectValue placeholder={isDataLoading ? "Loading..." : "Select faculty"} />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {faculties.length > 0 ? (
-                            faculties.map(f => (
-                              <SelectItem key={f.id} value={f.id}>
-                                {f.name}
-                              </SelectItem>
-                            ))
-                          ) : (
-                            <SelectItem value="none" disabled>
-                              No faculties found in database
-                            </SelectItem>
-                          )}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label>Batch</Label>
-                        <Select
-                          value={studentBatch}
-                          onValueChange={(v) => { setStudentBatch(v); setStudentSection(''); }}
-                          disabled={!studentFaculty}
-                          required
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder={isDataLoading ? "Loading..." : "Select batch"} />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {batches.filter(b => b.faculty_id === studentFaculty).map(batch => (
-                              <SelectItem key={batch.id} value={batch.id}>
-                                {batch.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Section</Label>
-                        <Select
-                          value={studentSection}
-                          onValueChange={setStudentSection}
-                          disabled={!studentBatch}
-                          required
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder={isDataLoading ? "Loading..." : "Select section"} />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {studentSections.map(section => (
-                              <SelectItem key={section.id} value={section.id}>
-                                {section.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="signupPassword">Password</Label>
-                      <div className="relative">
-                        <Input
-                          id="signupPassword"
-                          type={showPassword ? 'text' : 'password'}
-                          placeholder="Create a password"
-                          value={studentPassword}
-                          onChange={(e) => setStudentPassword(e.target.value)}
-                          required
-                        />
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="absolute right-0 top-0 h-full px-3"
-                          onClick={() => setShowPassword(!showPassword)}
-                        >
-                          {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                        </Button>
-                      </div>
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      After signup, you'll need to complete face registration to activate your account.
-                    </p>
-                    <Button type="submit" className="w-full" disabled={isLoading}>
-                      {isLoading ? 'Creating account...' : 'Create Account'}
+            {/* LOGIN TAB */}
+            <TabsContent value="login">
+              <form onSubmit={handleLogin} className="space-y-4 py-4">
+                <div className="space-y-2">
+                  <Label htmlFor="email">Email</Label>
+                  <Input id="email" type="email" placeholder="m@example.com" value={loginEmail} onChange={e => setLoginEmail(e.target.value)} required />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="password">Password</Label>
+                  <div className="relative">
+                    <Input id="password" type={showPassword ? "text" : "password"} value={loginPassword} onChange={e => setLoginPassword(e.target.value)} required />
+                    <Button type="button" variant="ghost" size="icon" className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent" onClick={() => setShowPassword(!showPassword)}>
+                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </Button>
-                  </form>
-                ) : (
-                  <form onSubmit={handleTeacherSignup} className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="teacherName">Full Name</Label>
-                      <Input
-                        id="teacherName"
-                        placeholder="Dr. Robert Miller"
-                        value={teacherName}
-                        onChange={(e) => setTeacherName(e.target.value)}
-                        required
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="teacherEmail">University Email</Label>
-                      <Input
-                        id="teacherEmail"
-                        type="email"
-                        placeholder="you@university.edu"
-                        value={teacherEmail}
-                        onChange={(e) => setTeacherEmail(e.target.value)}
-                        required
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Faculty / Department</Label>
-                      <Select value={teacherFaculty} onValueChange={setTeacherFaculty} required>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select faculty" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {faculties.length > 0 ? (
-                            faculties.map(f => (
-                              <SelectItem key={f.id} value={f.id}>
-                                {f.name}
-                              </SelectItem>
-                            ))
-                          ) : (
-                            <SelectItem value="none" disabled>
-                              No faculties found in database
-                            </SelectItem>
-                          )}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="teacherPassword">Password</Label>
+                  </div>
+                </div>
+                <Button type="submit" className="w-full" disabled={isLoading}>{isLoading ? 'Logging in...' : 'Login'}</Button>
+              </form>
+            </TabsContent>
+
+            {/* SIGNUP TAB */}
+            <TabsContent value="signup">
+              <Tabs defaultValue="student" className="w-full mt-4">
+                <TabsList className="grid w-full grid-cols-2 mb-4">
+                  <TabsTrigger value="student">Student</TabsTrigger>
+                  <TabsTrigger value="teacher">Teacher</TabsTrigger>
+                </TabsList>
+
+                {/* STUDENT SIGNUP */}
+                <TabsContent value="student">
+                  <form onSubmit={handleStudentSignup} className="space-y-3">
+                    <div className="space-y-1"><Label>Full Name</Label><Input value={studentName} onChange={e => setStudentName(e.target.value)} required /></div>
+                    <div className="space-y-1"><Label>Student ID (Roll)</Label><Input value={studentId} onChange={e => setStudentId(e.target.value)} required placeholder="e.g. 253-35-108" /></div>
+                    <div className="space-y-1"><Label>Email</Label><Input type="email" value={studentEmail} onChange={e => setStudentEmail(e.target.value)} required /></div>
+
+                    <div className="space-y-1">
+                      <Label>Password</Label>
                       <div className="relative">
-                        <Input
-                          id="teacherPassword"
-                          type={showPassword ? 'text' : 'password'}
-                          placeholder="Create a password"
-                          value={teacherPassword}
-                          onChange={(e) => setTeacherPassword(e.target.value)}
-                          required
-                        />
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="absolute right-0 top-0 h-full px-3"
-                          onClick={() => setShowPassword(!showPassword)}
-                        >
-                          {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        <Input type={showPassword ? "text" : "password"} value={studentPassword} onChange={e => setStudentPassword(e.target.value)} required />
+                        <Button type="button" variant="ghost" size="icon" className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent" onClick={() => setShowPassword(!showPassword)}>
+                          {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                         </Button>
                       </div>
                     </div>
 
-                    {/* Teaching Assignments */}
-                    <div className="space-y-3 pt-2 border-t">
-                      <Label>Teaching Assignments</Label>
-                      <p className="text-xs text-muted-foreground">
-                        Add the batch, section, and subject combinations you will teach.
-                      </p>
+                    <div className="space-y-1">
+                      <Label>Confirm Password</Label>
+                      <div className="relative">
+                        <Input type={showPassword ? "text" : "password"} value={studentConfirmPassword} onChange={e => setStudentConfirmPassword(e.target.value)} required />
+                      </div>
+                    </div>
+
+                    <div className="space-y-1">
+                      <Label>Department</Label>
+                      <Select value={studentFaculty} onValueChange={setStudentFaculty}>
+                        <SelectTrigger><SelectValue placeholder="Select Dept" /></SelectTrigger>
+                        <SelectContent>
+                          {faculties.map(f => <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="space-y-1">
+                        <Label>Batch</Label>
+                        <Select value={studentBatch} onValueChange={setStudentBatch} disabled={!studentFaculty}>
+                          <SelectTrigger><SelectValue placeholder="Batch" /></SelectTrigger>
+                          <SelectContent>
+                            {getBatchesForFaculty(studentFaculty).map(b => (
+                              <SelectItem key={b.id} value={b.id}>{b.name} (Sem {b.current_semester})</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-1">
+                        <Label>Section</Label>
+                        <Select value={studentSection} onValueChange={setStudentSection} disabled={!studentBatch}>
+                          <SelectTrigger><SelectValue placeholder="Sec" /></SelectTrigger>
+                          <SelectContent>
+                            {getSectionsForBatch(studentBatch).map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+
+                    <Button type="submit" className="w-full mt-2" disabled={isLoading || isDataLoading}>{isLoading ? 'Creating Account...' : 'Sign Up'}</Button>
+                  </form>
+                </TabsContent>
+
+                {/* TEACHER SIGNUP */}
+                <TabsContent value="teacher">
+                  <form onSubmit={handleTeacherSignup} className="space-y-3">
+                    <div className="space-y-1"><Label>Full Name</Label><Input value={teacherName} onChange={e => setTeacherName(e.target.value)} required /></div>
+                    <div className="space-y-1"><Label>Email</Label><Input type="email" value={teacherEmail} onChange={e => setTeacherEmail(e.target.value)} required /></div>
+
+                    <div className="space-y-1">
+                      <Label>Password</Label>
+                      <div className="relative">
+                        <Input type={showPassword ? "text" : "password"} value={teacherPassword} onChange={e => setTeacherPassword(e.target.value)} required />
+                        <Button type="button" variant="ghost" size="icon" className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent" onClick={() => setShowPassword(!showPassword)}>
+                          {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </Button>
+                      </div>
+                    </div>
+
+                    <div className="space-y-1">
+                      <Label>Confirm Password</Label>
+                      <div className="relative">
+                        <Input type={showPassword ? "text" : "password"} value={teacherConfirmPassword} onChange={e => setTeacherConfirmPassword(e.target.value)} required />
+                      </div>
+                    </div>
+
+                    <div className="space-y-1">
+                      <Label>Department</Label>
+                      <Select value={teacherFaculty} onValueChange={setTeacherFaculty}>
+                        <SelectTrigger><SelectValue placeholder="Select Dept" /></SelectTrigger>
+                        <SelectContent>
+                          {faculties.map(f => <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="border p-3 rounded-md space-y-2">
+                      <Label className="text-xs font-semibold uppercase text-muted-foreground">Add Class Assignment (Optional)</Label>
+                      <div className="grid grid-cols-2 gap-2">
+                        <Select value={currentAssignment.batchId} onValueChange={v => setCurrentAssignment({ ...currentAssignment, batchId: v })}>
+                          <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Batch" /></SelectTrigger>
+                          <SelectContent>{batches.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}</SelectContent>
+                        </Select>
+                        <Select value={currentAssignment.sectionId} onValueChange={v => setCurrentAssignment({ ...currentAssignment, sectionId: v })}>
+                          <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Section" /></SelectTrigger>
+                          <SelectContent>{getSectionsForBatch(currentAssignment.batchId).map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}</SelectContent>
+                        </Select>
+                      </div>
+                      <Select value={currentAssignment.subjectId} onValueChange={v => setCurrentAssignment({ ...currentAssignment, subjectId: v })}>
+                        <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Subject (Catalog)" /></SelectTrigger>
+                        <SelectContent>
+                          {catalogSubjects.map(s => <SelectItem key={s.id} value={s.id}>{s.subject_name}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                      <Button type="button" size="sm" variant="secondary" className="w-full h-7 text-xs" onClick={addAssignment} disabled={!currentAssignment.subjectId}>Add Class</Button>
 
                       {teacherAssignments.length > 0 && (
-                        <div className="flex flex-wrap gap-2 mb-3">
-                          {teacherAssignments.map((assignment, index) => (
-                            <Badge
-                              key={index}
-                              variant="secondary"
-                              className="flex items-center gap-1 py-1"
-                            >
-                              {getAssignmentLabel(assignment)}
-                              <button
-                                type="button"
-                                onClick={() => removeAssignment(index)}
-                                className="ml-1 hover:text-destructive"
-                              >
-                                <X className="w-3 h-3" />
-                              </button>
-                            </Badge>
-                          ))}
+                        <div className="text-xs text-muted-foreground mt-1">
+                          {teacherAssignments.length} classes added
                         </div>
                       )}
-
-                      <div className="grid grid-cols-3 gap-2">
-                        <Select
-                          value={currentAssignment.batchId}
-                          onValueChange={(v) => setCurrentAssignment({ ...currentAssignment, batchId: v, sectionId: '', subjectId: '' })}
-                        >
-                          <SelectTrigger className="text-[10px] px-1 h-8">
-                            <SelectValue placeholder="Batch" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {batches.map(batch => (
-                              <SelectItem key={batch.id} value={batch.id}>
-                                {batch.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <Select
-                          value={currentAssignment.sectionId}
-                          onValueChange={(v) => setCurrentAssignment({ ...currentAssignment, sectionId: v, subjectId: '' })}
-                          disabled={!currentAssignment.batchId}
-                        >
-                          <SelectTrigger className="text-[10px] px-1 h-8">
-                            <SelectValue placeholder="Sect" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {assignmentSections.map(section => (
-                              <SelectItem key={section.id} value={section.id}>
-                                {section.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <Select
-                          value={currentAssignment.subjectId}
-                          onValueChange={(v) => setCurrentAssignment({ ...currentAssignment, subjectId: v })}
-                          disabled={!currentAssignment.batchId}
-                        >
-                          <SelectTrigger className="text-[10px] px-1 h-8">
-                            <SelectValue placeholder="Subj" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {subjects.length > 0 && currentAssignment.batchId ? (
-                              (() => {
-                                // 1. Get all subjects belonging to ANY section in this batch
-                                const batchSectionIds = sections
-                                  .filter(s => s.batch_id === currentAssignment.batchId)
-                                  .map(s => s.id);
-
-                                const batchSubjects = subjects.filter(sub => batchSectionIds.includes(sub.section_id));
-
-                                // 2. Deduplicate by Name + Code
-                                const uniqueMap = new Map();
-                                batchSubjects.forEach(sub => {
-                                  const key = `${sub.code}-${sub.name}`;
-                                  if (!uniqueMap.has(key)) {
-                                    uniqueMap.set(key, sub);
-                                  }
-                                });
-                                const uniqueSubjects = Array.from(uniqueMap.values());
-
-                                if (uniqueSubjects.length === 0) {
-                                  return <SelectItem value="none" disabled>No subjects found for batch</SelectItem>
-                                }
-
-                                return uniqueSubjects.map(subject => (
-                                  <SelectItem key={subject.id} value={subject.id}>
-                                    {subject.name} ({subject.code})
-                                  </SelectItem>
-                                ));
-                              })()
-                            ) : (
-                              <SelectItem value="none" disabled>Select Batch first</SelectItem>
-                            )}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="w-full h-8 text-xs"
-                        onClick={addAssignment}
-                      >
-                        <Plus className="w-3 h-3 mr-1" />
-                        Add Assignment
-                      </Button>
                     </div>
 
-                    <Button type="submit" className="w-full" disabled={isLoading}>
-                      {isLoading ? 'Creating account...' : 'Create Account'}
-                    </Button>
+                    <Button type="submit" className="w-full mt-2" disabled={isLoading || isDataLoading}>{isLoading ? 'Creating Account...' : 'Sign Up'}</Button>
                   </form>
-                )}
-              </TabsContent>
-            </Tabs>
-          </CardContent>
-        </Card>
-      </div>
+                </TabsContent>
+
+              </Tabs>
+            </TabsContent>
+          </Tabs>
+        </CardContent>
+      </Card>
     </div>
   );
 };

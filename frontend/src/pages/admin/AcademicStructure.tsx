@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
     Building2,
     Layers,
@@ -8,6 +8,8 @@ import {
     Trash2,
     Pencil,
     Search,
+    Check,
+    ChevronsUpDown
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -37,8 +39,87 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
+import {
+    Command,
+    CommandEmpty,
+    CommandGroup,
+    CommandInput,
+    CommandItem,
+    CommandList,
+} from "@/components/ui/command";
+import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from "@/components/ui/popover";
 import { api, Faculty, Batch, Section, CourseCatalogItem } from '@/services/api';
 import { useToast } from '@/hooks/use-toast';
+import { cn } from "@/lib/utils";
+
+const Combobox = ({
+    items,
+    value,
+    onChange,
+    placeholder = "Select item...",
+    searchPlaceholder = "Search...",
+    disabled = false
+}: {
+    items: { label: string; value: string }[],
+    value: string,
+    onChange: (val: string) => void,
+    placeholder?: string,
+    searchPlaceholder?: string,
+    disabled?: boolean
+}) => {
+    const [open, setOpen] = useState(false);
+
+    return (
+        <Popover open={open} onOpenChange={setOpen}>
+            <PopoverTrigger asChild>
+                <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={open}
+                    className={cn("w-[200px] justify-between", !value && "text-muted-foreground")}
+                    disabled={disabled}
+                >
+                    {value
+                        ? items.find((item) => item.value === value)?.label
+                        : placeholder}
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-[200px] p-0">
+                <Command>
+                    <CommandInput placeholder={searchPlaceholder} />
+                    <CommandList>
+                        <CommandEmpty>No item found.</CommandEmpty>
+                        <CommandGroup>
+                            {items.map((item) => (
+                                <CommandItem
+                                    key={item.value}
+                                    value={item.label} // IMPORTANT: Command searches by label usually
+                                    onSelect={() => {
+                                        onChange(item.value === value ? "" : item.value);
+                                        setOpen(false);
+                                    }}
+                                >
+                                    <Check
+                                        className={cn(
+                                            "mr-2 h-4 w-4",
+                                            value === item.value ? "opacity-100" : "opacity-0"
+                                        )}
+                                    />
+                                    {item.label}
+                                </CommandItem>
+                            ))}
+                        </CommandGroup>
+                    </CommandList>
+                </Command>
+            </PopoverContent>
+        </Popover>
+    );
+};
 
 const AcademicStructure = () => {
     const { toast } = useToast();
@@ -51,9 +132,9 @@ const AcademicStructure = () => {
     const [isLoading, setIsLoading] = useState(true);
 
     // Filter States
-    const [filterDept, setFilterDept] = useState('all');
-    const [filterBatch, setFilterBatch] = useState('all');
-    const [filterSemester, setFilterSemester] = useState<string>('all');
+    const [filterDept, setFilterDept] = useState(''); // Empty string for 'Reset' state
+    const [filterBatch, setFilterBatch] = useState('');
+    const [filterSemester, setFilterSemester] = useState<string>('');
 
     // Modal States
     const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -65,7 +146,7 @@ const AcademicStructure = () => {
     const [dialogDeptId, setDialogDeptId] = useState('');
     const [searchQuery, setSearchQuery] = useState('');
 
-    // Edit Mode State - Keeping simple for now (Catalog might need update logic added later)
+    // Edit Mode State
     const [isEditMode, setIsEditMode] = useState(false);
     const [editId, setEditId] = useState('');
 
@@ -106,20 +187,30 @@ const AcademicStructure = () => {
 
     const handleTabChange = (val: string) => {
         setActiveTab(val);
-        setFilterDept('all');
-        setFilterBatch('all');
-        setFilterSemester('all');
+        setFilterDept('');
+        setFilterBatch('');
+        setFilterSemester('');
         setSelectedParentId('');
         setNewItemName('');
         setNewCode('');
         setSearchQuery('');
+        setIsEditMode(false);
+        setEditId('');
+    };
 
+    const formatSemester = (sem: number) => {
+        const j = sem % 10;
+        const k = sem % 100;
+        if (j === 1 && k !== 11) return `${sem}st Sem`;
+        if (j === 2 && k !== 12) return `${sem}nd Sem`;
+        if (j === 3 && k !== 13) return `${sem}rd Sem`;
+        return `${sem}th Sem`;
     };
 
     const handleEdit = (type: string, item: any) => {
         setIsEditMode(true);
         setEditId(item.id);
-        setNewItemName(item.name);
+        setNewItemName(item.name || item.subject_name);
 
         if (type === 'batches') {
             setSelectedParentId(item.faculty_id);
@@ -129,8 +220,11 @@ const AcademicStructure = () => {
                 setDialogDeptId(batch.faculty_id);
                 setSelectedParentId(item.batch_id);
             }
+        } else if (type === 'catalog') {
+            setNewCode(item.subject_code);
+            setSelectedParentId(item.faculty_id);
+            setSelectedSemester(item.semester_level.toString());
         }
-        // Catalog edit logic could be added here
 
         setIsDialogOpen(true);
     };
@@ -140,19 +234,31 @@ const AcademicStructure = () => {
         setIsLoading(true);
         try {
             if (isEditMode && editId) {
+                // ... (Update Logic Same as Before)
                 // Handle Update
-                let updateData: any = { name: newItemName };
+                let updateData: any = {};
                 let table = 'faculties';
-                if (activeTab === 'batches') table = 'batches';
-                if (activeTab === 'sections') table = 'sections';
-                // Catalog update not fully implemented in this refactor step, assumes delete/re-add for now or simple name update
 
-                if (table !== 'faculties' && table !== 'batches' && table !== 'sections') {
-                    // Skip catalog update for now
+                if (activeTab === 'batches') {
+                    table = 'batches';
+                    updateData = { name: newItemName, faculty_id: selectedParentId };
+                } else if (activeTab === 'sections') {
+                    table = 'sections';
+                    updateData = { name: newItemName, batch_id: selectedParentId };
+                } else if (activeTab === 'catalog') {
+                    table = 'course_catalog';
+                    updateData = {
+                        subject_name: newItemName,
+                        subject_code: newCode,
+                        faculty_id: selectedParentId,
+                        semester_level: parseInt(selectedSemester)
+                    };
                 } else {
-                    await api.updateResource(table, editId, updateData);
-                    toast({ title: 'Success', description: 'Item updated successfully' });
+                    updateData = { name: newItemName };
                 }
+
+                await api.updateResource(table, editId, updateData);
+                toast({ title: 'Success', description: 'Item updated successfully' });
             } else {
                 // Handle Create
                 if (activeTab === 'departments') {
@@ -168,7 +274,6 @@ const AcademicStructure = () => {
                 } else if (activeTab === 'batches') {
                     if (!selectedParentId) throw new Error("Department required");
                     if (isBulkMode) {
-                        // ... (keep existing bulk batch logic if needed, simplied for brevity)
                         const start = parseInt(initialBatch);
                         const end = parseInt(finalBatch);
                         const promises = [];
@@ -202,8 +307,6 @@ const AcademicStructure = () => {
                         const lines = bulkSubjects.split('\n').filter(l => l.trim());
                         const promises = [];
                         for (const line of lines) {
-                            // Attempt to parse Code - Name
-                            // If not just use name and generate code
                             let name = line;
                             let code = "SUB";
                             if (line.includes('-')) {
@@ -267,8 +370,28 @@ const AcademicStructure = () => {
         }
     };
 
-    // Helper to get Department Name
     const getDeptName = (id: string) => departments.find(d => d.id === id)?.name || 'Unknown';
+
+    // Memoized Filter Options
+    const deptOptions = useMemo(() => departments.map(d => ({ label: d.name, value: d.id })), [departments]);
+
+    const batchOptions = useMemo(() => {
+        if (!filterDept) return [];
+        return batches
+            .filter(b => b.faculty_id === filterDept)
+            .map(b => ({ label: `Batch ${b.name}`, value: b.id })); // Added "Batch" prefix for clarity
+    }, [batches, filterDept]);
+
+    const sectionOptions = useMemo(() => {
+        if (!filterBatch) return [];
+        return sections
+            .filter(s => s.batch_id === filterBatch)
+            .map(s => ({ label: `Section ${s.name}`, value: s.id }));
+    }, [sections, filterBatch]);
+
+
+    const semesterOptions = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(i => ({ label: formatSemester(i), value: i.toString() }));
+
 
     return (
         <div className="space-y-4 sm:space-y-6 pb-6">
@@ -285,131 +408,118 @@ const AcademicStructure = () => {
                     <TabsTrigger value="catalog" className="text-xs sm:text-sm px-2 py-2">Course Catalog</TabsTrigger>
                 </TabsList>
 
-                {/* Search and Add Header */}
-                <div className="mt-4 sm:mt-6 flex flex-col sm:flex-row justify-between items-center gap-4">
-                    <div className="relative w-full sm:w-72">
-                        <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                        <Input
-                            placeholder={`Search ${activeTab}...`}
-                            className="pl-8"
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                        />
-                    </div>
+                {/* Global Toolbar */}
+                <div className="mt-4 sm:mt-6 flex flex-col items-start gap-4 p-4 border rounded-lg bg-card/50">
+                    <div className="flex flex-col sm:flex-row justify-between items-center gap-4 w-full">
+                        {/* Dynamic Filters based on Tab */}
+                        <div className="flex flex-wrap items-center gap-3">
+                            <span className="text-sm font-medium text-muted-foreground">Filters:</span>
 
-                    <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-                        <DialogTrigger asChild>
-                            <Button className="gap-2 w-full sm:w-auto"><Plus className="w-4 h-4" /> Add New</Button>
-                        </DialogTrigger>
-                        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto mx-4">
-                            <DialogHeader>
-                                <DialogTitle className="capitalize">Add New {activeTab === 'catalog' ? 'Subject' : activeTab.slice(0, -1)}</DialogTitle>
-                                <div className="flex items-center gap-2 pt-2">
-                                    <label className="flex items-center gap-2 cursor-pointer">
-                                        <input type="checkbox" checked={isBulkMode} onChange={(e) => setIsBulkMode(e.target.checked)} className="w-4 h-4" />
-                                        <span className="text-sm text-muted-foreground">Bulk Mode</span>
-                                    </label>
-                                </div>
-                            </DialogHeader>
-                            <div className="grid gap-4 py-4">
-                                {activeTab === 'departments' && (
-                                    isBulkMode ? (
-                                        <div className="grid gap-2">
-                                            <Label>Names (one per line)</Label>
-                                            <textarea value={bulkDepartments} onChange={(e) => setBulkDepartments(e.target.value)} className="min-h-[100px] w-full border rounded-md p-2 text-sm" />
-                                        </div>
-                                    ) : (
-                                        <div className="grid gap-2">
-                                            <Label>Name</Label>
-                                            <Input value={newItemName} onChange={(e) => setNewItemName(e.target.value)} />
-                                        </div>
-                                    )
-                                )}
+                            {/* Department Filter - Always visible unless in Dept tab where search is enough */}
+                            {activeTab !== 'departments' && (
+                                <Combobox
+                                    items={deptOptions}
+                                    value={filterDept}
+                                    onChange={(val) => {
+                                        setFilterDept(val);
+                                        setFilterBatch(''); // Reset batch when dept changes
+                                    }}
+                                    placeholder="Select Department..."
+                                    searchPlaceholder="Search Dept..."
+                                />
+                            )}
 
-                                {activeTab === 'batches' && (
-                                    <>
-                                        <div className="grid gap-2">
-                                            <Label>Department</Label>
-                                            <Select onValueChange={setSelectedParentId} value={selectedParentId}>
-                                                <SelectTrigger><SelectValue placeholder="Select Department" /></SelectTrigger>
-                                                <SelectContent>{departments.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}</SelectContent>
-                                            </Select>
-                                        </div>
-                                        {isBulkMode ? (
-                                            <div className="grid grid-cols-2 gap-2">
-                                                <div><Label>Start</Label><Input value={initialBatch} onChange={e => setInitialBatch(e.target.value)} placeholder="40" /></div>
-                                                <div><Label>End</Label><Input value={finalBatch} onChange={e => setFinalBatch(e.target.value)} placeholder="45" /></div>
+                            {/* Batch Filter - Visible for Sections */}
+                            {activeTab === 'sections' && (
+                                <Combobox
+                                    items={batchOptions}
+                                    value={filterBatch}
+                                    onChange={setFilterBatch}
+                                    placeholder={filterDept ? "Select Batch..." : "Select Dept First"}
+                                    disabled={!filterDept}
+                                />
+                            )}
+
+                            {/* Semester Filter - Visible for Catalog */}
+                            {activeTab === 'catalog' && (
+                                <Combobox
+                                    items={semesterOptions}
+                                    value={filterSemester}
+                                    onChange={setFilterSemester}
+                                    placeholder="Select Semester..."
+                                />
+                            )}
+                        </div>
+
+                        {/* Search & Add */}
+                        <div className="flex items-center gap-2 w-full sm:w-auto">
+                            <div className="relative flex-1 sm:w-64">
+                                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                                <Input
+                                    placeholder={`Search ${activeTab}...`}
+                                    className="pl-8"
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                />
+                            </div>
+                            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+                                <DialogTrigger asChild>
+                                    <Button size="icon"><Plus className="w-4 h-4" /></Button>
+                                </DialogTrigger>
+                                <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto mx-4">
+                                    {/* ... (Dialog Content Same as Before - keeping it valid) ... */}
+                                    <DialogHeader>
+                                        <DialogTitle className="capitalize">{isEditMode ? 'Edit' : 'Add New'} {activeTab === 'catalog' ? 'Subject' : activeTab.slice(0, -1)}</DialogTitle>
+                                        {!isEditMode && (
+                                            <div className="flex items-center gap-2 pt-2">
+                                                <label className="flex items-center gap-2 cursor-pointer">
+                                                    <input type="checkbox" checked={isBulkMode} onChange={(e) => setIsBulkMode(e.target.checked)} className="w-4 h-4" />
+                                                    <span className="text-sm text-muted-foreground">Bulk Mode</span>
+                                                </label>
                                             </div>
-                                        ) : (
-                                            <div className="grid gap-2"><Label>Name</Label><Input value={newItemName} onChange={e => setNewItemName(e.target.value)} placeholder="e.g. 45" /></div>
                                         )}
-                                    </>
-                                )}
-
-                                {activeTab === 'sections' && (
-                                    <>
-                                        <div className="grid gap-2">
-                                            <Label>Department</Label>
-                                            <Select onValueChange={(v) => { setDialogDeptId(v); setSelectedParentId('') }}>
-                                                <SelectTrigger><SelectValue placeholder="Select Department" /></SelectTrigger>
-                                                <SelectContent>{departments.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}</SelectContent>
-                                            </Select>
-                                        </div>
-                                        <div className="grid gap-2">
-                                            <Label>Batch</Label>
-                                            <Select onValueChange={setSelectedParentId} disabled={!dialogDeptId}>
-                                                <SelectTrigger><SelectValue placeholder="Select Batch" /></SelectTrigger>
-                                                <SelectContent>{batches.filter(b => b.faculty_id === dialogDeptId).map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}</SelectContent>
-                                            </Select>
-                                        </div>
-                                        {isBulkMode ? (
-                                            <div className="grid grid-cols-2 gap-2">
-                                                <div><Label>Start</Label><Input value={initialSection} onChange={e => setInitialSection(e.target.value.toUpperCase())} placeholder="A" maxLength={1} /></div>
-                                                <div><Label>End</Label><Input value={finalSection} onChange={e => setFinalSection(e.target.value.toUpperCase())} placeholder="F" maxLength={1} /></div>
-                                            </div>
-                                        ) : (
-                                            <div className="grid gap-2"><Label>Name</Label><Input value={newItemName} onChange={e => setNewItemName(e.target.value)} placeholder="A" /></div>
+                                    </DialogHeader>
+                                    <div className="grid gap-4 py-4">
+                                        {activeTab === 'departments' && (
+                                            isBulkMode ? (
+                                                <div className="grid gap-2"><Label>Names</Label><textarea value={bulkDepartments} onChange={(e) => setBulkDepartments(e.target.value)} className="min-h-[100px] w-full border rounded-md p-2 text-sm" /></div>
+                                            ) : (
+                                                <div className="grid gap-2"><Label>Name</Label><Input value={newItemName} onChange={(e) => setNewItemName(e.target.value)} /></div>
+                                            )
                                         )}
-                                    </>
-                                )}
-
-                                {activeTab === 'catalog' && (
-                                    <>
-                                        <div className="grid gap-2">
-                                            <Label>Department</Label>
-                                            <Select onValueChange={setSelectedParentId} value={selectedParentId}>
-                                                <SelectTrigger><SelectValue placeholder="Select Department" /></SelectTrigger>
-                                                <SelectContent>{departments.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}</SelectContent>
-                                            </Select>
-                                        </div>
-                                        <div className="grid gap-2">
-                                            <Label>Semester</Label>
-                                            <Select onValueChange={setSelectedSemester} value={selectedSemester}>
-                                                <SelectTrigger><SelectValue placeholder="Select Semester" /></SelectTrigger>
-                                                <SelectContent>
-                                                    {[1, 2, 3, 4, 5, 6, 7, 8].map(i => <SelectItem key={i} value={i.toString()}>Semester {i}</SelectItem>)}
-                                                </SelectContent>
-                                            </Select>
-                                        </div>
-                                        {isBulkMode ? (
-                                            <div className="grid gap-2">
-                                                <Label>Subjects (Code - Name)</Label>
-                                                <textarea value={bulkSubjects} onChange={(e) => setBulkSubjects(e.target.value)} className="min-h-[100px] w-full border rounded-md p-2 text-sm" placeholder="CSE-101 - Intro to CS&#10;MAT-101 - Math I" />
-                                            </div>
-                                        ) : (
+                                        {activeTab === 'batches' && (
                                             <>
-                                                <div className="grid gap-2"><Label>Code</Label><Input value={newCode} onChange={e => setNewCode(e.target.value)} placeholder="CSE-101" /></div>
-                                                <div className="grid gap-2"><Label>Name</Label><Input value={newItemName} onChange={e => setNewItemName(e.target.value)} placeholder="Computer Fundamental" /></div>
+                                                <div className="grid gap-2"><Label>Department</Label><Select onValueChange={setSelectedParentId} value={selectedParentId}><SelectTrigger><SelectValue placeholder="Department" /></SelectTrigger><SelectContent>{departments.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}</SelectContent></Select></div>
+                                                {isBulkMode ? (
+                                                    <div className="grid grid-cols-2 gap-2"><div><Label>Start</Label><Input value={initialBatch} onChange={e => setInitialBatch(e.target.value)} /></div><div><Label>End</Label><Input value={finalBatch} onChange={e => setFinalBatch(e.target.value)} /></div></div>
+                                                ) : (
+                                                    <div className="grid gap-2"><Label>Name</Label><Input value={newItemName} onChange={e => setNewItemName(e.target.value)} /></div>
+                                                )}
                                             </>
                                         )}
-                                    </>
-                                )}
-                            </div>
-                            <DialogFooter>
-                                <Button onClick={handleAdd} disabled={isLoading}>{isLoading ? 'Saving...' : 'Save'}</Button>
-                            </DialogFooter>
-                        </DialogContent>
-                    </Dialog>
+                                        {activeTab === 'sections' && (
+                                            <>
+                                                <div className="grid gap-2"><Label>Department</Label><Select onValueChange={(v) => { setDialogDeptId(v); setSelectedParentId('') }}><SelectTrigger><SelectValue placeholder="Department" /></SelectTrigger><SelectContent>{departments.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}</SelectContent></Select></div>
+                                                <div className="grid gap-2"><Label>Batch</Label><Select onValueChange={setSelectedParentId} value={selectedParentId} disabled={!dialogDeptId}><SelectTrigger><SelectValue placeholder="Batch" /></SelectTrigger><SelectContent>{batches.filter(b => b.faculty_id === dialogDeptId).map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}</SelectContent></Select></div>
+                                                {!isBulkMode ? <div className="grid gap-2"><Label>Name</Label><Input value={newItemName} onChange={e => setNewItemName(e.target.value)} /></div> : null}
+                                                {isBulkMode && (<div className="grid grid-cols-2 gap-2"><div><Label>Start</Label><Input value={initialSection} onChange={e => setInitialSection(e.target.value.toUpperCase())} maxLength={1} /></div><div><Label>End</Label><Input value={finalSection} onChange={e => setFinalSection(e.target.value.toUpperCase())} maxLength={1} /></div></div>)}
+                                            </>
+                                        )}
+                                        {activeTab === 'catalog' && (
+                                            <>
+                                                <div className="grid gap-2"><Label>Department</Label><Select onValueChange={setSelectedParentId} value={selectedParentId}><SelectTrigger><SelectValue placeholder="Department" /></SelectTrigger><SelectContent>{departments.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}</SelectContent></Select></div>
+                                                <div className="grid gap-2"><Label>Semester</Label><Select onValueChange={setSelectedSemester} value={selectedSemester}><SelectTrigger><SelectValue placeholder="Semester" /></SelectTrigger><SelectContent>{[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(i => <SelectItem key={i} value={i.toString()}>{formatSemester(i)}</SelectItem>)}</SelectContent></Select></div>
+                                                {isBulkMode ? <div className="grid gap-2"><Label>Subjects</Label><textarea value={bulkSubjects} onChange={e => setBulkSubjects(e.target.value)} className="min-h-[100px] w-full border rounded-md p-2 text-sm" /></div> : (
+                                                    <><div className="grid gap-2"><Label>Code</Label><Input value={newCode} onChange={e => setNewCode(e.target.value)} /></div><div className="grid gap-2"><Label>Name</Label><Input value={newItemName} onChange={e => setNewItemName(e.target.value)} /></div></>
+                                                )}
+                                            </>
+                                        )}
+                                    </div>
+                                    <DialogFooter><Button onClick={handleAdd}>{isLoading ? 'Saving...' : 'Save'}</Button></DialogFooter>
+                                </DialogContent>
+                            </Dialog>
+                        </div>
+                    </div>
                 </div>
 
                 <TabsContent value="departments">
@@ -421,18 +531,8 @@ const AcademicStructure = () => {
                                     <TableRow key={dept.id}>
                                         <TableCell className="font-medium">{dept.name}</TableCell>
                                         <TableCell className="text-right">
-                                            <Button variant="outline" size="sm" className="mr-2 text-amber-600 border-amber-200 hover:bg-amber-50" onClick={async () => {
-                                                const confirmMsg = `⚠️ END SEMESTER for ${dept.name}?\nType "CONFIRM".`;
-                                                if (prompt(confirmMsg) !== "CONFIRM") return;
-                                                try {
-                                                    await api.endSemester(dept.id);
-                                                    toast({ title: "Success", description: "Semester ended." });
-                                                    await fetchData();
-                                                } catch (e: any) {
-                                                    toast({ title: "Error", description: e.message, variant: "destructive" });
-                                                }
-                                            }}>End Sem</Button>
-                                            <Button variant="ghost" size="sm" onClick={() => handleDelete('faculties', dept.id)}><Trash2 className="w-4 h-4 text-destructive" /></Button>
+                                            <Button variant="ghost" size="sm" onClick={() => handleEdit('faculties', dept)} className="mr-1 text-blue-600 hover:text-blue-700 hover:bg-blue-50"><Pencil className="w-4 h-4" /></Button>
+                                            <Button variant="ghost" size="sm" onClick={() => handleDelete('faculties', dept.id)} className="text-red-500 hover:text-red-600 hover:bg-red-50"><Trash2 className="w-4 h-4" /></Button>
                                         </TableCell>
                                     </TableRow>
                                 ))}
@@ -442,21 +542,18 @@ const AcademicStructure = () => {
                 </TabsContent>
 
                 <TabsContent value="batches" className="space-y-4">
-                    <div className="flex gap-3">
-                        <Label className="text-sm self-center">Filter Dept:</Label>
-                        <Select value={filterDept} onValueChange={setFilterDept}><SelectTrigger className="w-48"><SelectValue placeholder="All" /></SelectTrigger><SelectContent><SelectItem value="all">All</SelectItem>{departments.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}</SelectContent></Select>
-                    </div>
                     <Card>
                         <Table>
                             <TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Department</TableHead><TableHead>Current Sem</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
                             <TableBody>
-                                {batches.filter(b => (filterDept === 'all' || b.faculty_id === filterDept) && b.name.includes(searchQuery)).map(batch => (
+                                {batches.filter(b => (!filterDept || b.faculty_id === filterDept) && b.name.includes(searchQuery)).map(batch => (
                                     <TableRow key={batch.id}>
                                         <TableCell>{batch.name}</TableCell>
                                         <TableCell>{getDeptName(batch.faculty_id)}</TableCell>
-                                        <TableCell>Semester {batch.current_semester}</TableCell>
+                                        <TableCell>{formatSemester(batch.current_semester)}</TableCell>
                                         <TableCell className="text-right">
-                                            <Button variant="ghost" size="sm" onClick={() => handleDelete('batches', batch.id)}><Trash2 className="w-4 h-4 text-destructive" /></Button>
+                                            <Button variant="ghost" size="sm" onClick={() => handleEdit('batches', batch)} className="mr-1 text-blue-600 hover:text-blue-700 hover:bg-blue-50"><Pencil className="w-4 h-4" /></Button>
+                                            <Button variant="ghost" size="sm" onClick={() => handleDelete('batches', batch.id)} className="text-red-500 hover:text-red-600 hover:bg-red-50"><Trash2 className="w-4 h-4" /></Button>
                                         </TableCell>
                                     </TableRow>
                                 ))}
@@ -466,27 +563,22 @@ const AcademicStructure = () => {
                 </TabsContent>
 
                 <TabsContent value="sections" className="space-y-4">
-                    <div className="flex gap-3 items-center flex-wrap">
-                        <Label>Filter Dept:</Label>
-                        <Select value={filterDept} onValueChange={v => { setFilterDept(v); setFilterBatch('all') }}><SelectTrigger className="w-40"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All</SelectItem>{departments.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}</SelectContent></Select>
-                        <Label>Batch:</Label>
-                        <Select value={filterBatch} onValueChange={setFilterBatch}><SelectTrigger className="w-40"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All</SelectItem>{batches.filter(b => filterDept === 'all' || b.faculty_id === filterDept).map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}</SelectContent></Select>
-                    </div>
                     <Card>
                         <Table>
                             <TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Batch</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
                             <TableBody>
                                 {sections.filter(s => {
                                     const b = batches.find(bat => bat.id === s.batch_id);
-                                    if (filterDept !== 'all' && b?.faculty_id !== filterDept) return false;
-                                    if (filterBatch !== 'all' && s.batch_id !== filterBatch) return false;
+                                    if (filterDept && b?.faculty_id !== filterDept) return false;
+                                    if (filterBatch && s.batch_id !== filterBatch) return false;
                                     return s.name.includes(searchQuery);
                                 }).map(section => (
                                     <TableRow key={section.id}>
                                         <TableCell>{section.name}</TableCell>
                                         <TableCell>{batches.find(b => b.id === section.batch_id)?.name || '-'}</TableCell>
                                         <TableCell className="text-right">
-                                            <Button variant="ghost" size="sm" onClick={() => handleDelete('sections', section.id)}><Trash2 className="w-4 h-4 text-destructive" /></Button>
+                                            <Button variant="ghost" size="sm" onClick={() => handleEdit('sections', section)} className="mr-1 text-blue-600 hover:text-blue-700 hover:bg-blue-50"><Pencil className="w-4 h-4" /></Button>
+                                            <Button variant="ghost" size="sm" onClick={() => handleDelete('sections', section.id)} className="text-red-500 hover:text-red-600 hover:bg-red-50"><Trash2 className="w-4 h-4" /></Button>
                                         </TableCell>
                                     </TableRow>
                                 ))}
@@ -496,28 +588,31 @@ const AcademicStructure = () => {
                 </TabsContent>
 
                 <TabsContent value="catalog" className="space-y-4">
-                    <div className="flex gap-3 items-center flex-wrap">
-                        <Label>Filter Dept:</Label>
-                        <Select value={filterDept} onValueChange={setFilterDept}><SelectTrigger className="w-40"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All</SelectItem>{departments.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}</SelectContent></Select>
-                        <Label>Semester:</Label>
-                        <Select value={filterSemester} onValueChange={setFilterSemester}><SelectTrigger className="w-40"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All</SelectItem>{[1, 2, 3, 4, 5, 6, 7, 8].map(i => <SelectItem key={i} value={i.toString()}>Sem {i}</SelectItem>)}</SelectContent></Select>
-                    </div>
                     <Card>
                         <Table>
-                            <TableHeader><TableRow><TableHead>Code</TableHead><TableHead>Name</TableHead><TableHead>Department</TableHead><TableHead>Semester</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
+                            <TableHeader>
+                                <TableRow className="h-10">
+                                    <TableHead className="py-2">Code</TableHead>
+                                    <TableHead className="py-2">Name</TableHead>
+                                    <TableHead className="py-2">Department</TableHead>
+                                    <TableHead className="py-2">Semester</TableHead>
+                                    <TableHead className="text-right py-2">Actions</TableHead>
+                                </TableRow>
+                            </TableHeader>
                             <TableBody>
                                 {catalog.filter(c => {
-                                    if (filterDept !== 'all' && c.faculty_id !== filterDept) return false;
-                                    if (filterSemester !== 'all' && c.semester_level !== parseInt(filterSemester)) return false;
+                                    if (filterDept && c.faculty_id !== filterDept) return false;
+                                    if (filterSemester && c.semester_level !== parseInt(filterSemester)) return false;
                                     return c.subject_name.toLowerCase().includes(searchQuery.toLowerCase()) || c.subject_code.toLowerCase().includes(searchQuery.toLowerCase());
                                 }).map(item => (
-                                    <TableRow key={item.id}>
-                                        <TableCell className="font-mono">{item.subject_code}</TableCell>
-                                        <TableCell>{item.subject_name}</TableCell>
-                                        <TableCell>{getDeptName(item.faculty_id)}</TableCell>
-                                        <TableCell>Semester {item.semester_level}</TableCell>
-                                        <TableCell className="text-right">
-                                            <Button variant="ghost" size="sm" onClick={() => handleDelete('course_catalog', item.id)}><Trash2 className="w-4 h-4 text-destructive" /></Button>
+                                    <TableRow key={item.id} className="h-8">
+                                        <TableCell className="font-mono text-xs py-1">{item.subject_code}</TableCell>
+                                        <TableCell className="text-xs py-1 font-medium">{item.subject_name}</TableCell>
+                                        <TableCell className="text-xs py-1 text-muted-foreground">{getDeptName(item.faculty_id)}</TableCell>
+                                        <TableCell className="text-xs py-1">{formatSemester(item.semester_level)}</TableCell>
+                                        <TableCell className="text-right py-1">
+                                            <Button variant="ghost" size="sm" onClick={() => handleEdit('catalog', item)} className="h-6 w-6 p-0 mr-1 text-blue-600 hover:text-blue-700 hover:bg-blue-50"><Pencil className="w-3 h-3" /></Button>
+                                            <Button variant="ghost" size="sm" onClick={() => handleDelete('course_catalog', item.id)} className="h-6 w-6 p-0 text-red-500 hover:text-red-600 hover:bg-red-50"><Trash2 className="w-3 h-3" /></Button>
                                         </TableCell>
                                     </TableRow>
                                 ))}
