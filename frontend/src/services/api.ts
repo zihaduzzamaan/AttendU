@@ -182,7 +182,7 @@ export const api = {
   getStudentByProfileId: async (profileId: string) => {
     const { data, error } = await supabase
       .from('students')
-      .select('*, section:sections(*, batch:batches(*))')
+      .select('*, section:sections(*, batch:batches(*, faculty:faculties(name)))')
       .eq('profile_id', profileId)
       .maybeSingle();
     if (error) throw error;

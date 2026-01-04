@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Progress } from '@/components/ui/progress';
 import { api } from '@/services/api';
 
-const TOTAL_CAPTURES = 3;
+const TOTAL_CAPTURES = 6;
 const CAPTURE_INTERVAL = 1000;
 
 const FaceRegistration = () => {
@@ -32,16 +32,19 @@ const FaceRegistration = () => {
   const [modelsLoaded, setModelsLoaded] = useState(false);
 
   // bKash-style verification states
-  const [livenessStep, setLivenessStep] = useState<'align' | 'blink' | 'capture' | 'done'>('align');
-  const [blinkCount, setBlinkCount] = useState(0);
+  const [livenessStep, setLivenessStep] = useState<'align' | 'front' | 'left' | 'right' | 'done'>('align');
+  const [yaw, setYaw] = useState(0.5); // 0.5 is center
   const [brightness, setBrightness] = useState(255);
   const [facePosition, setFacePosition] = useState<{ x: number, y: number, width: number, height: number } | null>(null);
   const [isCapturingAuto, setIsCapturingAuto] = useState(false);
+  const [isStable, setIsStable] = useState(false);
+  const noseHistory = useRef<{ x: number, y: number }[]>([]);
 
   const livenessPrompts = {
     align: 'Center your face in the oval',
-    blink: 'Great! Now blink your eyes once',
-    capture: 'Hold still... capturing...',
+    front: 'Look straight at the camera',
+    left: 'Great! Now turn your head LEFT',
+    right: 'Finally, turn your head RIGHT',
     done: 'Verification complete!'
   };
 
@@ -143,33 +146,44 @@ const FaceRegistration = () => {
 
           if (isCentered && isRightSize) {
             setFacePosition(box);
-            if (livenessStep === 'align') setLivenessStep('blink');
+            if (livenessStep === 'align') setLivenessStep('front');
           } else {
             setFacePosition(null);
-            // If we lose alignment during blink, go back to align
-            if (livenessStep === 'blink') setLivenessStep('align');
           }
 
-          // 3. Blink Detection (only if aligned and in blink step)
-          if (livenessStep === 'blink') {
-            const ear = calculateEAR(landmarks);
+          // 3. Pose Detection (Yaw)
+          const currentYaw = calculateHeadYaw(landmarks);
+          setYaw(currentYaw);
 
-            // More sensitive threshold: real-world blinks often don't reach 0.20
-            // Normal open eyes are usually ~0.26 - 0.30
-            if (lastEAR > 0.25 && ear < 0.23) {
-              setBlinkCount(prev => prev + 1);
-              setLivenessStep('capture');
-              autoCaptureBatch();
+          // 4. Stability Check (Blur prevention)
+          const nose = landmarks.getNose()[3];
+          noseHistory.current.push({ x: nose.x, y: nose.y });
+          if (noseHistory.current.length > 5) noseHistory.current.shift();
+
+          const stability = noseHistory.current.length >= 5 ? calculateStability(noseHistory.current) : 100;
+          const stable = stability < 2.5; // Threshold for "still"
+          setIsStable(stable);
+
+          if (isCentered && !isCapturingAuto && stable) {
+            if (livenessStep === 'front' && Math.abs(currentYaw - 0.5) < 0.1) {
+              autoCaptureBurst('front');
+            } else if (livenessStep === 'left' && currentYaw < 0.35) {
+              autoCaptureBurst('left');
+            } else if (livenessStep === 'right' && currentYaw > 0.65) {
+              autoCaptureBurst('right');
             }
-            lastEAR = ear;
+          }
 
-            // Visual Feedback: Draw landmarks for debug while it's in blink step
-            if (canvasRef.current) {
-              const ctx = canvasRef.current.getContext('2d');
-              if (ctx) {
-                ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
-                faceapi.draw.drawFaceLandmarks(canvasRef.current, resizedDetection);
-              }
+          // Visual Feedback: Draw yaw debug dots
+          if (canvasRef.current) {
+            const ctx = canvasRef.current.getContext('2d');
+            if (ctx) {
+              ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+              // Draw yaw indicator dots (Green if stable, Blue if moving)
+              ctx.fillStyle = stable ? '#22c55e' : '#3b82f6';
+              ctx.beginPath();
+              ctx.arc(nose.x, nose.y, 8, 0, Math.PI * 2);
+              ctx.fill();
             }
           }
         } else {
@@ -186,16 +200,24 @@ const FaceRegistration = () => {
   }, [stage, modelsLoaded, livenessStep]);
 
   // Helpers
-  const calculateEAR = (landmarks: faceapi.FaceLandmarks68) => {
-    const leftEye = landmarks.getLeftEye();
-    const rightEye = landmarks.getRightEye();
-    const getEAR = (eye: faceapi.Point[]) => {
-      const p2_p6 = Math.sqrt(Math.pow(eye[1].x - eye[5].x, 2) + Math.pow(eye[1].y - eye[5].y, 2));
-      const p3_p5 = Math.sqrt(Math.pow(eye[2].x - eye[4].x, 2) + Math.pow(eye[2].y - eye[4].y, 2));
-      const p1_p4 = Math.sqrt(Math.pow(eye[0].x - eye[3].x, 2) + Math.pow(eye[0].y - eye[3].y, 2));
-      return (p2_p6 + p3_p5) / (2.0 * p1_p4);
-    };
-    return (getEAR(leftEye) + getEAR(rightEye)) / 2;
+  const calculateStability = (history: { x: number, y: number }[]) => {
+    let totalDist = 0;
+    for (let i = 1; i < history.length; i++) {
+      totalDist += Math.sqrt(Math.pow(history[i].x - history[i - 1].x, 2) + Math.pow(history[i].y - history[i - 1].y, 2));
+    }
+    return totalDist / history.length;
+  };
+
+  const calculateHeadYaw = (landmarks: faceapi.FaceLandmarks68) => {
+    const noseTip = landmarks.getNose()[3]; // Point 30
+    const leftEyeInner = landmarks.getLeftEye()[3]; // Point 39
+    const rightEyeInner = landmarks.getRightEye()[0]; // Point 42
+
+    const distLeft = Math.abs(noseTip.x - leftEyeInner.x);
+    const distRight = Math.abs(noseTip.x - rightEyeInner.x);
+
+    // Returns 0.5 when centered, < 0.5 when turned left, > 0.5 when turned right
+    return distLeft / (distLeft + distRight);
   };
 
   const checkBrightness = (video: HTMLVideoElement) => {
@@ -212,15 +234,17 @@ const FaceRegistration = () => {
     return sum / (40 * 40);
   };
 
-  const autoCaptureBatch = async () => {
-    if (isCapturingAuto) return;
+  const autoCaptureBurst = async (pose: 'front' | 'left' | 'right') => {
+    if (isCapturingAuto || !videoRef.current) return;
     setIsCapturingAuto(true);
 
-    const frames: { id: number, url: string, blob: Blob }[] = [];
+    const burstCount = 2;
+    const newFrames: { id: number, url: string, blob: Blob }[] = [];
 
-    for (let i = 0; i < TOTAL_CAPTURES; i++) {
-      await new Promise(r => setTimeout(r, 400));
-      if (!videoRef.current) break;
+    for (let i = 0; i < burstCount; i++) {
+      // Visual flash
+      setShowFlash(true);
+      setTimeout(() => setShowFlash(false), 100);
 
       const canvas = document.createElement('canvas');
       canvas.width = videoRef.current.videoWidth;
@@ -228,14 +252,19 @@ const FaceRegistration = () => {
       const ctx = canvas.getContext('2d');
       if (ctx) {
         ctx.drawImage(videoRef.current, 0, 0);
-        const url = canvas.toDataURL('image/jpeg', 0.95);
-        const blob = await new Promise<Blob>(r => canvas.toBlob(b => r(b!), 'image/jpeg', 0.95));
-        frames.push({ id: Date.now() + i, url, blob });
+        const url = canvas.toDataURL('image/jpeg', 0.98); // High quality
+        const blob = await new Promise<Blob>(r => canvas.toBlob(b => r(b!), 'image/jpeg', 0.98));
+        newFrames.push({ id: Date.now() + i, url, blob });
       }
+      await new Promise(r => setTimeout(r, 200)); // Short gap between burst frames
     }
 
-    setCapturedImages(frames);
-    setLivenessStep('done');
+    setCapturedImages(prev => [...prev, ...newFrames]);
+
+    if (pose === 'front') setLivenessStep('left');
+    else if (pose === 'left') setLivenessStep('right');
+    else if (pose === 'right') setLivenessStep('done');
+
     setIsCapturingAuto(false);
   };
 
@@ -423,7 +452,7 @@ const FaceRegistration = () => {
 
                     {/* Animated Oval Border */}
                     <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[40%] h-[60%] border-4 rounded-[50%] transition-all duration-300 ${facePosition ? 'border-green-500 shadow-[0_0_20px_rgba(34,197,94,0.5)]' : 'border-white/30'}`}>
-                      {facePosition && livenessStep === 'blink' && (
+                      {facePosition && (livenessStep === 'front' || livenessStep === 'left' || livenessStep === 'right') && (
                         <div className="absolute inset-0 animate-pulse bg-green-500/10 rounded-[50%]" />
                       )}
                     </div>
@@ -439,14 +468,29 @@ const FaceRegistration = () => {
                           💡 Increase Lighting
                         </div>
                       )}
-                      {livenessStep === 'blink' && (
+                      {livenessStep === 'front' && facePosition && (
                         <div className="bg-primary text-primary-foreground px-6 py-2 rounded-2xl text-sm font-black shadow-2xl animate-in zoom-in slide-in-from-bottom-5">
-                          Now Blink! 😉
+                          Look Straight 😐
                         </div>
                       )}
-                      {livenessStep === 'capture' && (
+                      {livenessStep === 'left' && (
+                        <div className="bg-primary text-primary-foreground px-6 py-2 rounded-2xl text-sm font-black shadow-2xl animate-in zoom-in slide-in-from-bottom-5">
+                          Turn Head Left ⬅️
+                        </div>
+                      )}
+                      {livenessStep === 'right' && (
+                        <div className="bg-primary text-primary-foreground px-6 py-2 rounded-2xl text-sm font-black shadow-2xl animate-in zoom-in slide-in-from-bottom-5">
+                          Turn Head Right ➡️
+                        </div>
+                      )}
+                      {isCapturingAuto && (
                         <div className="bg-green-600 text-white px-8 py-3 rounded-2xl text-lg font-black shadow-2xl animate-pulse">
-                          Capturing... Stay still
+                          Capturing Burst... 📸
+                        </div>
+                      )}
+                      {!isStable && facePosition && !isCapturingAuto && (
+                        <div className="bg-orange-500 text-white px-6 py-2 rounded-2xl text-sm font-bold shadow-lg animate-pulse">
+                          Hold Still... ✋
                         </div>
                       )}
                     </div>
@@ -522,14 +566,18 @@ const FaceRegistration = () => {
                 </div>
                 <Progress value={(capturedImages.length / TOTAL_CAPTURES) * 100} className="h-3 rounded-full" />
 
-                <div className="grid grid-cols-2 gap-3 py-2">
-                  <div className={`p-3 rounded-2xl border-2 transition-all ${facePosition ? 'bg-green-50 border-green-200' : 'bg-muted border-transparent'}`}>
-                    <div className={`w-2 h-2 rounded-full mx-auto mb-2 ${facePosition ? 'bg-green-500' : 'bg-gray-400'}`} />
-                    <div className="text-[10px] font-bold uppercase text-muted-foreground">Alignment</div>
+                <div className="grid grid-cols-3 gap-2 py-2">
+                  <div className={`p-2 rounded-xl border transition-all ${capturedImages.length >= 1 ? 'bg-green-50 border-green-200' : 'bg-muted border-transparent'}`}>
+                    <div className={`w-1.5 h-1.5 rounded-full mx-auto mb-1 ${capturedImages.length >= 1 ? 'bg-green-500' : 'bg-gray-400'}`} />
+                    <div className="text-[8px] font-bold uppercase text-muted-foreground">Front</div>
                   </div>
-                  <div className={`p-3 rounded-2xl border-2 transition-all ${livenessStep === 'done' ? 'bg-green-50 border-green-200' : 'bg-muted border-transparent'}`}>
-                    <div className={`w-2 h-2 rounded-full mx-auto mb-2 ${livenessStep === 'done' ? 'bg-green-500' : 'bg-gray-400'}`} />
-                    <div className="text-[10px] font-bold uppercase text-muted-foreground">Liveness</div>
+                  <div className={`p-2 rounded-xl border transition-all ${capturedImages.length >= 2 ? 'bg-green-50 border-green-200' : 'bg-muted border-transparent'}`}>
+                    <div className={`w-1.5 h-1.5 rounded-full mx-auto mb-1 ${capturedImages.length >= 2 ? 'bg-green-500' : 'bg-gray-400'}`} />
+                    <div className="text-[8px] font-bold uppercase text-muted-foreground">Left</div>
+                  </div>
+                  <div className={`p-2 rounded-xl border transition-all ${capturedImages.length >= 3 ? 'bg-green-50 border-green-200' : 'bg-muted border-transparent'}`}>
+                    <div className={`w-1.5 h-1.5 rounded-full mx-auto mb-1 ${capturedImages.length >= 3 ? 'bg-green-500' : 'bg-gray-400'}`} />
+                    <div className="text-[8px] font-bold uppercase text-muted-foreground">Right</div>
                   </div>
                 </div>
               </div>
