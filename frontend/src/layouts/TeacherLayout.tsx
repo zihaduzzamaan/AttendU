@@ -28,7 +28,7 @@ const TeacherLayout = () => {
 
     const navItems = [
         { icon: LayoutDashboard, label: 'Dashboard', path: '/teacher/dashboard' },
-        { icon: Users, label: 'Batches', path: '/teacher/batches' },
+        { icon: Users, label: 'Classes', path: '/teacher/classes' },
         { icon: CalendarClock, label: 'Routine', path: '/teacher/routine' },
         { icon: Camera, label: 'Take Attendance', path: '/teacher/take-attendance' },
         { icon: History, label: 'Past Attendance', path: '/teacher/past-attendance' },

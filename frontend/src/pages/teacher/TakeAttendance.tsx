@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Camera, CheckCircle, AlertCircle, RefreshCw, UserCheck, XCircle, FileUp, Layers } from "lucide-react";
+import { Camera, CheckCircle, AlertCircle, RefreshCw, UserCheck, XCircle, FileUp, Layers, Users } from "lucide-react";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import * as faceapi from 'face-api.js';
@@ -32,6 +32,12 @@ const TakeAttendance = () => {
     // Batch Capture State
     const [capturedImages, setCapturedImages] = useState<{ id: number, url: string, blob: Blob }[]>([]);
     const [isProcessingBatch, setIsProcessingBatch] = useState(false);
+    const [lastMatchedName, setLastMatchedName] = useState<string | null>(null);
+    const [isTracking, setIsTracking] = useState(false);
+    const [backendStatus, setBackendStatus] = useState<'online' | 'error' | 'loading'>('online');
+
+    // Recognition Config
+    const RECOGNITION_THRESHOLD = 0.5; // Ignore matches below 50% confidence (aligns with backend tolerance 0.6)
 
     const videoRef = useRef<HTMLVideoElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -82,6 +88,42 @@ const TakeAttendance = () => {
     const MATCH_THRESHOLD = 0.6;
     const recognizedStudentsRef = useRef<Set<string>>(new Set());
     const knownEmbeddingsRef = useRef<Record<string, number[]>>({});
+
+    // 📸 Camera Lifecycle Management
+    useEffect(() => {
+        let stream: MediaStream | null = null;
+
+        const startCamera = async () => {
+            if (step === 'camera') {
+                try {
+                    stream = await navigator.mediaDevices.getUserMedia({
+                        video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
+                    });
+                    if (videoRef.current) {
+                        videoRef.current.srcObject = stream;
+                        setIsDetecting(true);
+                    }
+                } catch (err) {
+                    console.error("Camera access error:", err);
+                    toast.error("Could not access camera. Manual upload only.");
+                    setIsDetecting(false);
+                }
+            }
+        };
+
+        if (step === 'camera') {
+            startCamera();
+        } else {
+            stopDetectionLoop();
+            setIsDetecting(false);
+        }
+
+        return () => {
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+            }
+        };
+    }, [step]);
 
     // Add image to batch (from Upload)
     const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -143,28 +185,44 @@ const TakeAttendance = () => {
         }
 
         setIsProcessingBatch(true);
+        setBackendStatus('loading');
         const uniqueRecognized = new Set<string>(recognizedStudentsRef.current); // Start with existing
         let totalDetected = 0;
         let newMatchesCount = 0;
 
         try {
-            toast.info(`Processing ${capturedImages.length} images...`);
+            toast.info(`Processing batch of ${capturedImages.length} images...`);
 
             for (const img of capturedImages) {
                 try {
                     const result = await api.recognizeFaces(img.blob, knownEmbeddingsRef.current);
+                    setBackendStatus('online'); // Connection successful
                     totalDetected += (result.detected_faces || 0);
 
                     if (result.matches && result.matches.length > 0) {
                         result.matches.forEach((match: any) => {
-                            if (!uniqueRecognized.has(match.student_id)) {
-                                uniqueRecognized.add(match.student_id);
-                                newMatchesCount++;
+                            const studentId = String(match.student_id);
+                            if (match.confidence >= RECOGNITION_THRESHOLD) {
+                                if (!uniqueRecognized.has(studentId)) {
+                                    uniqueRecognized.add(studentId);
+                                    newMatchesCount++;
+
+                                    // Identify student name for logs/feedback
+                                    const student = allStudentsRef.current.find(s => String(s.id) === studentId);
+                                    if (student) {
+                                        console.log(`✨ Batch Match: ${student.profile?.name} (${(match.confidence * 100).toFixed(1)}%)`);
+                                    }
+                                }
+                            } else {
+                                console.warn(`⚠️ Match ignored due to low confidence: ${match.student_id} (${(match.confidence * 100).toFixed(1)}%)`);
                             }
                         });
                     }
                 } catch (e) {
                     console.error("Error processing batch image:", e);
+                    setBackendStatus('error');
+                    toast.error("AI Server connection interrupted.");
+                    break;
                 }
             }
 
@@ -174,9 +232,11 @@ const TakeAttendance = () => {
             setDetectedCount(totalDetected); // Shows total faces seen across all images
 
             if (newMatchesCount > 0) {
-                toast.success(`Found ${newMatchesCount} new student(s) in batch!`);
+                toast.success(`Match successfully found! ${newMatchesCount} new student(s) recognized.`);
+            } else if (totalDetected > 0) {
+                toast.warning(`Detected ${totalDetected} face(s), but no confident matches were found. Try another angle or better lighting.`);
             } else {
-                toast.info("Processing complete. No new students found.");
+                toast.info("Processing complete. No faces detected in these images.");
             }
 
         } catch (error) {
@@ -196,30 +256,40 @@ const TakeAttendance = () => {
 
         console.log(`📊 Recognition complete: ${recognized.size}/${students.length} students recognized`);
 
-        const finalAttendance = students.map((s: any) => ({
-            studentId: s.id,
-            name: s.profile?.name || "Unknown",
-            student_id: s.student_id,
-            status: recognized.has(s.id) ? 'present' as const : 'absent' as const,
-            confidence: recognized.has(s.id) ? 0.95 : 0
-        }));
+        const finalAttendance = students.map((s: any) => {
+            const isPresent = recognized.has(String(s.id));
+            return {
+                studentId: s.id,
+                name: s.profile?.name || "Unknown",
+                student_id: s.student_id,
+                status: isPresent ? 'present' as const : 'absent' as const,
+                confidence: isPresent ? 0.95 : 0
+            };
+        });
 
         setAttendanceData(finalAttendance);
         setStep('verify');
-        toast.success(`Recognized ${recognized.size} out of ${students.length} students`);
+
+        if (recognized.size === 0) {
+            toast.error("Scanning complete, but no students were recognized. Please review manually.");
+        } else {
+            toast.success(`Scanning complete! ${recognized.size} of ${students.length} students were successfully identified.`);
+        }
     }
 
-    const startDetectionLoop = (students: any[]) => {
-        if (!videoRef.current) return;
-        setIsDetecting(true);
+    const initializeTracking = (students: any[]) => {
+        if (!videoRef.current) {
+            toast.error("Camera not ready for tracking");
+            return;
+        }
+
         setDetectedCount(0);
-        setRecognizedCount(0);
         setTotalStudents(students.length);
-        setTotalStudents(students.length);
-        // We DO NOT reset recognizedStudentsRef here if coming from a "resume scan" scenario, 
-        // but typically we start fresh. Let's keep it fresh for now.
-        recognizedStudentsRef.current = new Set();
-        setCapturedImages([]); // Reset batch on new scan start
+
+        // DO NOT reset recognizedStudentsRef.current here. 
+        // This allows combined Live + Upload results.
+
+        setCapturedImages(prev => prev); // Trigger re-render if needed
 
         // Filter students with valid embeddings
         const studentsWithEmbeddings = students.filter(s => {
@@ -242,17 +312,17 @@ const TakeAttendance = () => {
             const embedding = typeof s.face_embedding === 'string'
                 ? JSON.parse(s.face_embedding)
                 : s.face_embedding;
-            knownEmbeddings[s.id] = embedding;
+            knownEmbeddings[String(s.id)] = embedding;
         });
 
         // Store in ref for upload handler
         knownEmbeddingsRef.current = knownEmbeddings;
+        setIsTracking(true);
 
         detectionInterval.current = setInterval(async () => {
             if (!videoRef.current || !canvasRef.current) return;
 
             try {
-                // ... existing capture code ...
                 // Capture current video frame
                 const canvas = document.createElement('canvas');
                 canvas.width = videoRef.current.videoWidth;
@@ -263,21 +333,38 @@ const TakeAttendance = () => {
                 ctx.drawImage(videoRef.current, 0, 0);
 
                 // Convert to blob
-                const blob = await new Promise<Blob>((resolve) => {
-                    canvas.toBlob((b) => resolve(b!), 'image/jpeg', 0.8);
+                const blob = await new Promise<Blob | null>((resolve) => {
+                    canvas.toBlob((b) => resolve(b), 'image/jpeg', 0.8);
                 });
+
+                if (!blob) {
+                    console.warn("⚠️ Could not capture frame blob, skipping...");
+                    return;
+                }
 
                 // Send to Python backend for recognition
                 const result = await api.recognizeFaces(blob, knownEmbeddings);
+                setBackendStatus('online'); // Connection verified
 
                 setDetectedCount(result.detected_faces || 0);
 
                 // Update recognized students
                 if (result.matches && result.matches.length > 0) {
                     result.matches.forEach((match: any) => {
-                        if (!recognizedStudentsRef.current.has(match.student_id)) {
-                            console.log(`✅ Matched: ${match.student_id} (confidence: ${(match.confidence * 100).toFixed(1)}%)`);
-                            recognizedStudentsRef.current.add(match.student_id);
+                        if (match.confidence >= RECOGNITION_THRESHOLD) {
+                            const studentId = String(match.student_id);
+                            if (!recognizedStudentsRef.current.has(studentId)) {
+                                const student = allStudentsRef.current.find(s => String(s.id) === studentId);
+                                const studentName = student?.profile?.name || "Unknown Student";
+                                const confidencePercent = (match.confidence * 100).toFixed(1);
+
+                                console.log(`✅ Matched: ${studentName} (${confidencePercent}%)`);
+                                recognizedStudentsRef.current.add(studentId);
+
+                                // Provide visual feedback for the match
+                                setLastMatchedName(`${studentName} (${confidencePercent}%)`);
+                                setTimeout(() => setLastMatchedName(null), 3000); // Clear after 3s
+                            }
                         }
                     });
                     setRecognizedCount(recognizedStudentsRef.current.size);
@@ -297,18 +384,25 @@ const TakeAttendance = () => {
                 }
             } catch (e) {
                 console.error('Detection error:', e);
+                setBackendStatus('error');
+                stopTracking(); // Pause on connection error
+                toast.error("AI Server connection lost. Please check your internet or retry.");
             }
-        }, 500);
+        }, 800); // Slightly slower interval for stability
 
         // Auto-complete timeout REMOVED to allow manual batch processing
     };
 
-    const stopDetectionLoop = () => {
-        setIsDetecting(false);
+    const stopTracking = () => {
+        setIsTracking(false);
         if (detectionInterval.current) {
             clearInterval(detectionInterval.current);
             detectionInterval.current = null;
         }
+    };
+
+    const stopDetectionLoop = () => {
+        stopTracking();
         if (videoRef.current && videoRef.current.srcObject) {
             const stream = videoRef.current.srcObject as MediaStream;
             stream.getTracks().forEach(track => track.stop());
@@ -321,34 +415,44 @@ const TakeAttendance = () => {
             return;
         }
 
-        const selectedAssignment = assignments.find(a => a.id === selectedAssignmentId);
-        if (!selectedAssignment) {
-            toast.error("Invalid assignment selected");
-            return;
-        }
-
         try {
-            const students = await api.getStudentsBySection(selectedAssignment.subject?.section_id);
-            allStudentsRef.current = students; // Store for later
-            setStep('camera');
+            setIsLoading(true);
 
-            // Wait for video element to mount
-            setTimeout(async () => {
+            // 1. Get Students & Data
+            const assignment = assignments.find(a => a.id === selectedAssignmentId);
+            const students = await api.getStudentsBySection(assignment.section_id);
+            allStudentsRef.current = students;
+            setTotalStudents(students.length);
+
+            // Reset state for NEW session
+            setRecognizedCount(0);
+            recognizedStudentsRef.current = new Set();
+            setCapturedImages([]);
+            setBackendStatus('online');
+
+            // Build initial embeddings list
+            const studentsWithEmbeddings = students.filter(s => {
+                if (!s.face_embedding) return false;
                 try {
-                    const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-                    if (videoRef.current) {
-                        videoRef.current.srcObject = stream;
-                        startDetectionLoop(students);
-                    }
-                } catch (err) {
-                    console.error("Camera access error:", err);
-                    toast.error("Could not access camera (using generic fallback)");
-                    // Still start loop logic so upload works, but without stream
-                    startDetectionLoop(students);
-                }
-            }, 100);
+                    const embedding = typeof s.face_embedding === 'string' ? JSON.parse(s.face_embedding) : s.face_embedding;
+                    return Array.isArray(embedding) && embedding.length > 0;
+                } catch { return false; }
+            });
+
+            const knownEmbeddings: Record<string, number[]> = {};
+            studentsWithEmbeddings.forEach(s => {
+                const embedding = typeof s.face_embedding === 'string' ? JSON.parse(s.face_embedding) : s.face_embedding;
+                knownEmbeddings[String(s.id)] = embedding;
+            });
+            knownEmbeddingsRef.current = knownEmbeddings;
+
+            // 2. Switch to Camera Step (useEffect will start the hardware)
+            setStep('camera');
+            setIsLoading(false);
         } catch (e) {
-            toast.error("Failed to load students for this section");
+            console.error("Initialization error:", e);
+            toast.error("Failed to load students");
+            setIsLoading(false);
         }
     };
 
@@ -369,7 +473,9 @@ const TakeAttendance = () => {
             const logs = attendanceData.map(d => ({
                 student_id: d.studentId,
                 routine_id: null, // No specific routine matches manual session
-                subject_id: selectedAssignment.subject_id,
+                course_catalog_id: selectedAssignment.course_catalog_id,
+                section_id: selectedAssignment.section_id,
+                teacher_id: user.teacher_id,
                 date: new Date().toISOString().split('T')[0],
                 status: d.status,
                 confidence: d.status === 'present' ? 0.95 : 0
@@ -418,10 +524,10 @@ const TakeAttendance = () => {
                                         <SelectContent>
                                             {assignments.map(a => (
                                                 <SelectItem key={a.id} value={a.id}>
-                                                    <div className="flex flex-col">
-                                                        <span className="font-medium">{a.subject?.name}</span>
+                                                    <div className="flex flex-col text-left">
+                                                        <span className="font-medium">{a.course_catalog?.subject_name}</span>
                                                         <span className="text-xs text-muted-foreground">
-                                                            {a.subject?.section?.batch?.name} • Section {a.subject?.section?.name}
+                                                            {a.section?.batch?.name} • Section {a.section?.name}
                                                         </span>
                                                     </div>
                                                 </SelectItem>
@@ -433,12 +539,12 @@ const TakeAttendance = () => {
                                         const selected = assignments.find(a => a.id === selectedAssignmentId);
                                         return selected ? (
                                             <div className="text-sm bg-muted p-3 rounded-md space-y-1">
-                                                <div className="font-semibold">{selected.subject?.name}</div>
+                                                <div className="font-semibold">{selected.course_catalog?.subject_name}</div>
                                                 <div className="text-muted-foreground">
-                                                    Code: {selected.subject?.code}
+                                                    Code: {selected.course_catalog?.subject_code}
                                                 </div>
                                                 <div className="text-muted-foreground">
-                                                    {selected.subject?.section?.batch?.name} - Section {selected.subject?.section?.name}
+                                                    {selected.section?.batch?.name} - Section {selected.section?.name}
                                                 </div>
                                             </div>
                                         ) : null;
@@ -447,7 +553,7 @@ const TakeAttendance = () => {
                             ) : (
                                 <div className="text-center py-8 text-muted-foreground">
                                     <p>No assignments found.</p>
-                                    <p className="text-sm mt-2">Please add assignments in the "Batches" page first.</p>
+                                    <p className="text-sm mt-2">Please add assignments in the "Classes" page first.</p>
                                 </div>
                             )
                         ) : (
@@ -470,100 +576,172 @@ const TakeAttendance = () => {
     }
 
     if (step === 'camera') {
+        const backendColor = backendStatus === 'online' ? 'bg-green-500' : backendStatus === 'loading' ? 'bg-yellow-500' : 'bg-red-500';
+        const backendText = backendStatus === 'online' ? 'AI Server: Online' : backendStatus === 'loading' ? 'AI Server: Processing...' : 'AI Server: Error';
+
         return (
-            <div className="max-w-2xl mx-auto space-y-6">
-                <div className="text-center space-y-2">
-                    <h1 className="text-2xl font-bold">Class Scan</h1>
-                    <p className="text-muted-foreground">Auto-scan is running. You can also capture/upload photos for better accuracy.</p>
-                </div>
-
-                {/* Main Camera View */}
-                <div className="relative aspect-video bg-black rounded-lg overflow-hidden border-4 border-primary/20 shadow-2xl">
-                    <video
-                        ref={videoRef}
-                        autoPlay
-                        muted
-                        playsInline
-                        className="absolute inset-0 w-full h-full object-cover scale-x-[-1]"
-                    />
-                    <canvas ref={canvasRef} className="absolute inset-0 w-full h-full pointer-events-none" />
-
-                    <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-black/80 to-transparent">
-                        <div className="flex items-center justify-between text-white">
-                            <div className="flex items-center gap-2">
-                                <div className="w-3 h-3 rounded-full bg-red-500 animate-pulse" />
-                                <span className="font-mono text-sm uppercase tracking-wider">Live</span>
-                            </div>
-                            <div className="flex items-center gap-4">
-                                <div className="flex items-center gap-2 bg-green-500/20 px-3 py-1 rounded-full border border-green-400/30">
-                                    <UserCheck className="w-4 h-4 text-green-400" />
-                                    <span className="font-medium">{recognizedCount}/{totalStudents} Matches</span>
-                                </div>
-                            </div>
-                        </div>
+            <div className="max-w-4xl mx-auto space-y-6">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                    <div className="space-y-1">
+                        <h1 className="text-2xl font-bold tracking-tight">Attendance Session</h1>
+                        <p className="text-muted-foreground text-sm">Preview mode is active. Start tracking to begin identification.</p>
+                    </div>
+                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-muted border border-border">
+                        <div className={`w-2 h-2 rounded-full ${backendColor} ${backendStatus === 'loading' ? 'animate-pulse' : ''}`} />
+                        <span className="text-xs font-medium">{backendText}</span>
                     </div>
                 </div>
 
-                {/* Batch Capture UI */}
-                <div className="space-y-4">
-                    {/* Thumbnail Strip */}
-                    {capturedImages.length > 0 && (
-                        <div className="flex gap-2 overflow-x-auto py-2 bg-muted/30 p-2 rounded-lg scrollbar-hide">
-                            {capturedImages.map((img, idx) => (
-                                <div key={img.id} className="relative w-24 h-16 rounded border overflow-hidden shrink-0 group">
-                                    <img src={img.url} className="w-full h-full object-cover" />
-                                    <button
-                                        onClick={() => removeImage(img.id)}
-                                        className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity"
-                                    >
-                                        <XCircle className="text-white w-6 h-6" />
-                                    </button>
-                                    <div className="absolute bottom-0 right-0 bg-primary text-primary-foreground text-[10px] px-1">
-                                        #{idx + 1}
+                {/* Video & Tracking UI */}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div className="lg:col-span-2 space-y-4">
+                        <div className="relative aspect-video bg-black rounded-2xl overflow-hidden border border-border shadow-xl ring-1 ring-black/5">
+                            <video
+                                ref={videoRef}
+                                autoPlay
+                                muted
+                                playsInline
+                                className="absolute inset-0 w-full h-full object-cover scale-x-[-1]"
+                            />
+                            <canvas ref={canvasRef} className="absolute inset-0 w-full h-full pointer-events-none" />
+
+                            {/* Tracking Active Indicator */}
+                            {isTracking && (
+                                <div className="absolute top-4 right-4 flex items-center gap-2 bg-red-500/90 text-white px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest animate-pulse border border-white/20">
+                                    <div className="w-1.5 h-1.5 rounded-full bg-white" />
+                                    Tracking Active
+                                </div>
+                            )}
+
+                            {/* Match Overlay */}
+                            {lastMatchedName && (
+                                <div className="absolute top-1/4 left-1/2 -translate-x-1/2 animate-in fade-in zoom-in duration-300 z-10">
+                                    <div className="bg-green-600/90 backdrop-blur-md text-white px-6 py-3 rounded-2xl shadow-2xl flex items-center gap-3 border border-white/20">
+                                        <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
+                                            <UserCheck className="w-5 h-5" />
+                                        </div>
+                                        <div>
+                                            <div className="text-[10px] uppercase opacity-70 font-bold text-center">Recognized</div>
+                                            <div className="font-black text-lg leading-tight text-center">{lastMatchedName}</div>
+                                        </div>
                                     </div>
                                 </div>
-                            ))}
+                            )}
+
+                            <div className="absolute inset-x-0 bottom-0 p-6 bg-gradient-to-t from-black/90 via-black/40 to-transparent">
+                                <div className="flex items-center justify-between text-white">
+                                    <div className="flex items-center gap-4">
+                                        <div className="flex items-center gap-2">
+                                            <div className={`w-3 h-3 rounded-full ${isDetecting ? 'bg-green-500' : 'bg-red-500'} animate-pulse`} />
+                                            <span className="font-mono text-xs uppercase tracking-widest font-bold">Camera {isDetecting ? 'On' : 'Off'}</span>
+                                        </div>
+                                        {detectedCount > 0 && (
+                                            <div className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-blue-500/20 backdrop-blur-md border border-blue-400/30">
+                                                <Users className="w-3.5 h-3.5 text-blue-400" />
+                                                <span className="text-sm font-mono font-bold">{detectedCount} Seen</span>
+                                            </div>
+                                        )}
+                                    </div>
+                                    <div className="flex items-center gap-3">
+                                        <div className="flex flex-col items-end">
+                                            <span className="text-[10px] uppercase opacity-60 font-bold">Progress</span>
+                                            <div className="flex items-center gap-2 bg-white/10 px-3 py-1 rounded-full border border-white/10">
+                                                <span className="font-black text-lg">{recognizedCount}</span>
+                                                <span className="opacity-40">/</span>
+                                                <span className="opacity-60">{totalStudents}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
-                    )}
 
-                    {/* Controls */}
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                        <Button variant="secondary" onClick={captureFrameToBatch}>
-                            <Camera className="w-4 h-4 mr-2" />
-                            Snap Frame
-                        </Button>
-
-                        <div className="relative">
-                            <input type="file" accept="image/*" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onChange={handleFileUpload} />
-                            <Button variant="secondary" className="w-full">
-                                <FileUp className="w-4 h-4 mr-2" />
-                                Upload
-                            </Button>
-                        </div>
-
+                        {/* Primary Action Button - START TRACKING */}
                         <Button
-                            className="col-span-2"
-                            disabled={isProcessingBatch || capturedImages.length === 0}
-                            onClick={processBatch}
+                            size="lg"
+                            className={`w-full py-8 text-xl font-black rounded-2xl transition-all duration-300 shadow-lg hover:shadow-2xl ${isTracking ? 'bg-red-500 hover:bg-red-600' : 'bg-primary hover:bg-primary/90'}`}
+                            onClick={isTracking ? stopTracking : () => initializeTracking(allStudentsRef.current)}
                         >
-                            {isProcessingBatch ? <RefreshCw className="w-4 h-4 mr-2 animate-spin" /> : <Layers className="w-4 h-4 mr-2" />}
-                            Process Batch ({capturedImages.length})
+                            {isTracking ? (
+                                <div className="flex items-center gap-3">
+                                    <XCircle className="w-6 h-6" /> Stop Recognition
+                                </div>
+                            ) : (
+                                <div className="flex items-center gap-3">
+                                    <Camera className="w-6 h-6" /> Start Live Tracking
+                                </div>
+                            )}
                         </Button>
                     </div>
 
-                    <div className="h-px bg-border" />
+                    {/* Controls Sidebar */}
+                    <div className="space-y-4">
+                        <Card className="border-border/50 bg-card/50">
+                            <CardHeader className="pb-3 px-4">
+                                <CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Snapshot & Upload</CardTitle>
+                            </CardHeader>
+                            <CardContent className="space-y-3 px-4 pb-4">
+                                <div className="grid grid-cols-1 gap-2">
+                                    <Button variant="outline" className="h-12 border-dashed border-2 hover:bg-muted" onClick={captureFrameToBatch}>
+                                        <Camera className="w-4 h-4 mr-2 text-primary" />
+                                        Capture Frame
+                                    </Button>
+                                    <div className="relative">
+                                        <input type="file" accept="image/*" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onChange={handleFileUpload} />
+                                        <Button variant="outline" className="w-full h-12 border-dashed border-2 hover:bg-muted">
+                                            <FileUp className="w-4 h-4 mr-2 text-blue-500" />
+                                            Upload Photo
+                                        </Button>
+                                    </div>
+                                </div>
+                            </CardContent>
+                        </Card>
 
-                    <div className="flex justify-between items-center bg-muted/50 p-4 rounded-lg">
-                        <div className="text-sm text-muted-foreground">
-                            Ready to finalize?
-                        </div>
-                        <div className="flex gap-2">
-                            <Button variant="outline" onClick={() => { stopDetectionLoop(); setStep('select'); }}>
-                                Cancel
-                            </Button>
-                            <Button size="lg" onClick={finalizeAttendance}>
-                                <CheckCircle className="w-5 h-5 mr-2" />
-                                Review Attendance
+                        <Card className="border-border/50 bg-card/50">
+                            <CardHeader className="pb-3 px-4">
+                                <div className="flex justify-between items-center">
+                                    <CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Pending Queue</CardTitle>
+                                    <span className="bg-primary/10 text-primary text-[10px] px-2 py-0.5 rounded-full font-bold">{capturedImages.length}</span>
+                                </div>
+                            </CardHeader>
+                            <CardContent className="space-y-4 px-4 pb-4">
+                                {capturedImages.length > 0 ? (
+                                    <div className="grid grid-cols-4 gap-2">
+                                        {capturedImages.slice(0, 8).map((img) => (
+                                            <div key={img.id} className="relative aspect-square rounded-lg overflow-hidden border border-border group">
+                                                <img src={img.url} className="w-full h-full object-cover" />
+                                                <button onClick={() => removeImage(img.id)} className="absolute inset-0 bg-red-500/80 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-all">
+                                                    <XCircle className="text-white w-4 h-4" />
+                                                </button>
+                                            </div>
+                                        ))}
+                                        {capturedImages.length > 8 && (
+                                            <div className="flex items-center justify-center bg-muted rounded-lg text-[10px] font-bold">+{capturedImages.length - 8}</div>
+                                        )}
+                                    </div>
+                                ) : (
+                                    <div className="text-center py-6 text-[10px] text-muted-foreground border-2 border-dashed rounded-xl">No pending images</div>
+                                )}
+
+                                <Button
+                                    className="w-full h-14 bg-green-600 hover:bg-green-700 text-white font-bold shadow-green-500/20 shadow-lg"
+                                    disabled={isProcessingBatch || capturedImages.length === 0}
+                                    onClick={processBatch}
+                                >
+                                    {isProcessingBatch ? <RefreshCw className="animate-spin mr-2 w-5 h-5" /> : <Layers className="mr-2 w-5 h-5" />}
+                                    Run Processing
+                                </Button>
+                            </CardContent>
+                        </Card>
+
+                        <div className="pt-2">
+                            <Button
+                                variant="secondary"
+                                className="w-full h-12 text-sm font-semibold"
+                                onClick={finalizeAttendance}
+                            >
+                                Finish & Verify
+                                <UserCheck className="ml-2 w-4 h-4" />
                             </Button>
                         </div>
                     </div>

@@ -128,7 +128,14 @@ export const api = {
     return data as CourseCatalogItem[];
   },
 
-
+  getSubjects: async (sectionId: string) => {
+    const catalog = await api.getSubjectsForSection(sectionId);
+    return catalog.map(c => ({
+      id: c.id,
+      name: c.subject_name,
+      code: c.subject_code
+    }));
+  },
   // Users
   getProfiles: async (role?: UserRole) => {
     let query = supabase.from('profiles').select('*');
@@ -309,53 +316,44 @@ export const api = {
   },
 
   getAttendanceHistory: async (filters?: { teacher_id?: string; student_id?: string; section_id?: string }) => {
-    // This query is complex. We are linking Logs -> Routine -> Catalog/Section
     let query = supabase.from('attendance_logs').select(`
       *,
       student:students(
         id,
+        student_id,
         profile:profiles(name)
       ),
       routine:routines(
         day_of_week,
         start_time,
         end_time,
-        teacher_id,
         course_catalog:course_catalog_id(subject_name, subject_code),
         section:sections(name, batch:batches(name))
-      )
+      ),
+      course_catalog:course_catalog_id(subject_name, subject_code),
+      section:sections(name, batch:batches(name))
     `).order('created_at', { ascending: false });
 
     if (filters?.teacher_id) {
-      // Logic for teacher: My Routines
-      // We can filter on the inner join but Supabase (Postgrest) filtering deep relations is tricky.
-      // Usually better to filter by routine_id list OR use !inner join.
-      // For now, let's try !inner on routine
-      query = supabase.from('attendance_logs').select(`
-        *,
-        student:students(
-          id,
-          profile:profiles(name)
-        ),
-        routine:routines!inner(
-          teacher_id,
-          day_of_week,
-          start_time,
-          end_time,
-          course_catalog:course_catalog_id(subject_name, subject_code),
-          section:sections(name, batch:batches(name))
-        )
-      `).eq('routine.teacher_id', filters.teacher_id).order('created_at', { ascending: false });
+      // Filter by routine teacher OR manual teacher
+      query = query.or(`teacher_id.eq.${filters.teacher_id},routine.teacher_id.eq.${filters.teacher_id}`);
     }
 
     if (filters?.student_id) {
       query = query.eq('student_id', filters.student_id);
     }
 
+    if (filters?.section_id) {
+      // Filter by routine section OR manual section
+      query = query.or(`section_id.eq.${filters.section_id},routine.section_id.eq.${filters.section_id}`);
+    }
+
     const { data, error } = await query;
     if (error) throw error;
     return data;
   },
+
+
 
   // Delete & Update Helpers
   deleteResource: async (table: string, id: string) => {
@@ -426,6 +424,7 @@ export const api = {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
+      console.log(`📤 Sending face registration request (Blob size: ${imageBlob.size} bytes)...`);
       const response = await fetch(`${PYTHON_BACKEND}/api/face/register`, {
         method: 'POST',
         body: formData,
@@ -435,11 +434,13 @@ export const api = {
       clearTimeout(timeoutId);
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.detail || 'Face registration failed');
+        const errorText = await response.text();
+        console.error(`❌ Registration API failed (${response.status}):`, errorText);
+        throw new Error('Face registration failed. Please ensure your face is well-lit and clear.');
       }
 
       const result = await response.json();
+      console.log('✅ Registration API response:', result);
       return result;
     } catch (error: any) {
       if (error.name === 'AbortError') {
@@ -457,21 +458,28 @@ export const api = {
     const PYTHON_BACKEND = 'https://arefintitly-attendu-server.hf.space';
 
     try {
+      if (!(imageBlob instanceof Blob)) {
+        console.error('❌ recognizeFaces: parameter 1 is not a Blob', imageBlob);
+        throw new Error('Internal Error: Invalid image data captured.');
+      }
       const formData = new FormData();
       formData.append('image', imageBlob, 'capture.jpg');
       formData.append('known_embeddings', JSON.stringify(knownEmbeddings));
 
+      console.log(`📤 Sending recognition request (Image: ${imageBlob.size} bytes, Known Embeddings: ${Object.keys(knownEmbeddings).length})`);
       const response = await fetch(`${PYTHON_BACKEND}/api/face/recognize`, {
         method: 'POST',
         body: formData,
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.detail || 'Face recognition failed');
+        const errorText = await response.text();
+        console.error(`❌ Recognition API failed (${response.status}):`, errorText);
+        throw new Error('Face recognition service is currently unavailable.');
       }
 
       const result = await response.json();
+      console.log('✅ Recognition API response:', result);
       return result;
     } catch (error) {
       console.error('Error calling Python backend:', error);

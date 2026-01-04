@@ -19,7 +19,7 @@ import AttendanceManagement from "./pages/admin/AttendanceManagement";
 import Settings from "./pages/admin/Settings";
 import TeacherLayout from "./layouts/TeacherLayout";
 import TeacherDashboard from "./pages/teacher/TeacherDashboard";
-import Batches from "./pages/teacher/Batches";
+import Classes from "./pages/teacher/Classes";
 import Routine from "./pages/teacher/Routine";
 import TakeAttendance from "./pages/teacher/TakeAttendance";
 import PastAttendance from "./pages/teacher/PastAttendance";
@@ -62,7 +62,7 @@ const App = () => (
               <Route path="/teacher" element={<TeacherLayout />}>
                 <Route index element={<Navigate to="/teacher/dashboard" replace />} />
                 <Route path="dashboard" element={<TeacherDashboard />} />
-                <Route path="batches" element={<Batches />} />
+                <Route path="classes" element={<Classes />} />
                 <Route path="routine" element={<Routine />} />
                 <Route path="take-attendance" element={<TakeAttendance />} />
                 <Route path="past-attendance" element={<PastAttendance />} />

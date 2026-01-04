@@ -45,7 +45,7 @@ const StudentAttendance = () => {
 
     const subjectStats = useMemo(() => {
         return subjects.map(subject => {
-            const subjectRecords = history.filter(r => r.subject_id === subject.id);
+            const subjectRecords = history.filter(r => (r.course_catalog_id || r.routine?.course_catalog_id) === subject.id);
             const total = subjectRecords.length;
             const present = subjectRecords.filter(r => r.status === 'present').length;
             const absent = total - present;

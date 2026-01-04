@@ -33,7 +33,7 @@ const StudentProfile = () => {
         if (user?.id) {
             setPendingStudentId(user.id);
             setSelectedRole('student');
-            navigate("/face-registration");
+            navigate("/face-registration?mode=update");
         }
     };
 

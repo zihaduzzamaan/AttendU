@@ -119,10 +119,10 @@ const TeacherDashboard = () => {
                                     >
                                         <div className="space-y-1 min-w-0 flex-1">
                                             <p className="font-medium leading-tight truncate">
-                                                {routine.subject?.name}
+                                                {routine.course_catalog?.subject_name}
                                             </p>
                                             <p className="text-xs sm:text-sm text-muted-foreground truncate">
-                                                {routine.subject?.section?.batch?.name} • {routine.subject?.section?.name}
+                                                {routine.section?.batch?.name} • {routine.section?.name}
                                             </p>
                                         </div>
                                         <div className="flex items-center gap-2 sm:flex-col sm:items-end shrink-0">

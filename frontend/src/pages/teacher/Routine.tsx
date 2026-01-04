@@ -68,7 +68,8 @@ const Routine = () => {
                     day_of_week: day,
                     start_time: startTime || null,
                     end_time: endTime || null,
-                    subject_id: selectedAssignment.subject_id,
+                    course_catalog_id: selectedAssignment.course_catalog_id,
+                    section_id: selectedAssignment.section_id,
                     teacher_id: user.teacher_id,
                     room_id: roomId || 'TBD'
                 };
@@ -114,8 +115,8 @@ const Routine = () => {
         items: routines
             .filter(r => r.day_of_week === day)
             .filter(r =>
-                r.subject?.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                r.subject?.code?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                r.course_catalog?.subject_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                r.course_catalog?.subject_code?.toLowerCase().includes(searchQuery.toLowerCase()) ||
                 r.room_id?.toLowerCase().includes(searchQuery.toLowerCase())
             )
             .sort((a, b) => {
@@ -154,7 +155,7 @@ const Routine = () => {
                                     <SelectContent>
                                         {assignments.map(a => (
                                             <SelectItem key={a.id} value={a.id} className="text-sm">
-                                                {a.subject?.name} - {a.subject?.section?.batch?.name} {a.subject?.section?.name}
+                                                {a.course_catalog?.subject_name} - {a.section?.batch?.name} {a.section?.name}
                                             </SelectItem>
                                         ))}
                                     </SelectContent>
@@ -239,9 +240,9 @@ const Routine = () => {
                                             {items.map((routine) => (
                                                 <div key={routine.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 border rounded-lg">
                                                     <div className="flex-1 min-w-0 space-y-1">
-                                                        <div className="font-medium truncate text-sm">{routine.subject?.name}</div>
+                                                        <div className="font-medium truncate text-sm">{routine.course_catalog?.subject_name}</div>
                                                         <div className="text-xs text-muted-foreground truncate">
-                                                            {routine.subject?.section?.batch?.name} - {routine.subject?.section?.name}
+                                                            {routine.section?.batch?.name} - {routine.section?.name}
                                                         </div>
                                                     </div>
                                                     <div className="flex items-center justify-between sm:justify-end gap-2 text-xs">
@@ -298,7 +299,7 @@ const Routine = () => {
                                 <div className="space-y-1 px-4">
                                     <h3 className="font-semibold text-base md:text-lg">No Assignments Found</h3>
                                     <p className="text-xs sm:text-sm text-muted-foreground">
-                                        Add assignments in "Batches" first
+                                        Add assignments in "Classes" first
                                     </p>
                                 </div>
                             </div>

@@ -61,13 +61,16 @@ const PastAttendance = () => {
         const grouped = new Map<string, SessionGroup>();
 
         allRecords.forEach(record => {
-            const key = `${record.subject_id}-${record.date}`;
+            const subjId = record.course_catalog_id || record.routine?.course_catalog_id || "unknown";
+            const subjName = record.course_catalog?.subject_name || record.routine?.course_catalog?.subject_name || "Unknown Subject";
+            const key = `${subjId}-${record.date}`;
+
             if (!grouped.has(key)) {
                 grouped.set(key, {
                     id: key,
                     date: record.date,
-                    subjectId: record.subject_id,
-                    subjectName: record.subject?.name || "Unknown",
+                    subjectId: subjId,
+                    subjectName: subjName,
                     totalPresent: 0,
                     totalAbsent: 0,
                     records: []
@@ -101,9 +104,10 @@ const PastAttendance = () => {
             // Re-sync the selected session view
             if (selectedSession) {
                 const refreshedRecords = allRecords.map(r => r.id === recordId ? { ...r, status: newStatus } : r);
-                const updatedSessionRecords = refreshedRecords.filter(r =>
-                    r.subject_id === selectedSession.subjectId && r.date === selectedSession.date
-                );
+                const updatedSessionRecords = refreshedRecords.filter(r => {
+                    const rSubjId = r.course_catalog_id || r.routine?.course_catalog_id;
+                    return rSubjId === selectedSession.subjectId && r.date === selectedSession.date;
+                });
 
                 let p = 0, a = 0;
                 updatedSessionRecords.forEach(r => r.status === 'present' ? p++ : a++);
@@ -156,8 +160,8 @@ const PastAttendance = () => {
                                     <SelectItem value="all">All Subjects</SelectItem>
                                     {/* Show assigned classes */}
                                     {assignedClasses.map(ac => (
-                                        <SelectItem key={ac.subject_id} value={ac.subject_id}>
-                                            {ac.subject?.name}
+                                        <SelectItem key={ac.course_catalog_id} value={ac.course_catalog_id}>
+                                            {ac.course_catalog?.subject_name}
                                         </SelectItem>
                                     ))}
                                     {/* Show unique subjects from history that aren't in assignments (e.g. manual sessions) */}

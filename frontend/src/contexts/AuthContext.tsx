@@ -62,7 +62,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (teacher) extraData = { teacher_id: teacher.id };
         } else if (profile.role === 'student') {
           const student = await withTimeout(api.getStudentByProfileId(profile.id), 5000, "Student sync timeout");
-          if (student) extraData = { student_id: student.id };
+          if (student) extraData = { student_id: student.id, face_registered: student.face_registered };
         }
       } catch (metaErr) {
         console.warn('⚠️ Metadata fetch failed (non-critical):', metaErr);

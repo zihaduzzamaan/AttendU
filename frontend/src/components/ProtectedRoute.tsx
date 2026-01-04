@@ -7,7 +7,7 @@ interface ProtectedRouteProps {
 }
 
 const ProtectedRoute = ({ allowedRole }: ProtectedRouteProps) => {
-    const { isAuthenticated, role } = useAuth();
+    const { isAuthenticated, role, user } = useAuth();
 
     if (!isAuthenticated) {
         return <Navigate to="/" replace />;
@@ -20,6 +20,11 @@ const ProtectedRoute = ({ allowedRole }: ProtectedRouteProps) => {
         if (role === 'student') return <Navigate to="/student/attendance" replace />;
         if (role === 'teacher') return <Navigate to="/teacher/dashboard" replace />;
         return <Navigate to="/" replace />;
+    }
+
+    // Phase 13: Mandatory Face Registration for Students
+    if (role === 'student' && !(user as any)?.face_registered && window.location.pathname !== '/face-registration') {
+        return <Navigate to="/face-registration" replace />;
     }
 
     return <Outlet />;
