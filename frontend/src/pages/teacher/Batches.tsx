@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Users, BookOpen, Plus, Trash2, GraduationCap, Search } from "lucide-react";
+import { Users, BookOpen, Plus, Trash2, GraduationCap, Search, Calendar } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import {
     Table,
@@ -36,13 +36,13 @@ const Batches = () => {
     const [faculties, setFaculties] = useState<any[]>([]);
     const [batches, setBatches] = useState<any[]>([]);
     const [sections, setSections] = useState<any[]>([]);
-    const [subjects, setSubjects] = useState<any[]>([]);
+    const [catalogSubjects, setCatalogSubjects] = useState<any[]>([]); // New Catalog Subjects
 
     // Form state
     const [selectedFacultyId, setSelectedFacultyId] = useState("");
     const [selectedBatchId, setSelectedBatchId] = useState("");
     const [selectedSectionId, setSelectedSectionId] = useState("");
-    const [selectedSubjectId, setSelectedSubjectId] = useState("");
+    const [selectedCatalogId, setSelectedCatalogId] = useState(""); // Replaces selectedSubjectId
 
     useEffect(() => {
         fetchData();
@@ -68,45 +68,69 @@ const Batches = () => {
 
     const fetchStructure = async () => {
         try {
-            const [f, b, s, sub] = await Promise.all([
+            const [f, b, s] = await Promise.all([
                 api.getFaculties(),
                 api.getBatches(),
                 api.getSections(),
-                api.getSubjects()
             ]);
-            setFaculties(f);
-            setBatches(b);
-            setSections(s);
-            setSubjects(sub);
+            setFaculties(f || []);
+            setBatches(b || []);
+            setSections(s || []);
         } catch (e) {
             console.error("Failed to load structure", e);
         }
     };
 
+    // Filter Logic
     const filteredBatches = batches.filter(b => b.faculty_id === selectedFacultyId);
     const filteredSections = sections.filter(s => s.batch_id === selectedBatchId);
-    const filteredSubjects = subjects.filter(sub => sub.section_id === selectedSectionId);
+
+    // When Batch is selected, fetch compatible subjects from Course Catalog
+    useEffect(() => {
+        if (selectedBatchId) {
+            const batch = batches.find(b => b.id === selectedBatchId);
+            if (batch) {
+                // Fetch catalog for this Faculty + Semester
+                const fetchCatalog = async () => {
+                    try {
+                        const data = await api.getCourseCatalog(batch.faculty_id, batch.current_semester);
+                        setCatalogSubjects(data || []);
+                    } catch (e) {
+                        console.error("Failed to fetch catalog subjects", e);
+                        setCatalogSubjects([]);
+                    }
+                };
+                fetchCatalog();
+            }
+        } else {
+            setCatalogSubjects([]);
+        }
+    }, [selectedBatchId, batches]);
+
 
     const handleAddAssignment = async () => {
-        if (!selectedSubjectId || !user?.teacher_id) {
-            toast.error("Please select a subject");
+        if (!selectedCatalogId || !selectedSectionId || !user?.teacher_id) {
+            toast.error("Please select all fields");
             return;
         }
 
-        const alreadyAssigned = assignedClasses.some(a => a.subject_id === selectedSubjectId);
+        const alreadyAssigned = assignedClasses.some(a =>
+            a.course_catalog_id === selectedCatalogId && a.section_id === selectedSectionId
+        );
         if (alreadyAssigned) {
-            toast.error("You are already assigned to this subject");
+            toast.error("You are already assigned to this subject/section");
             return;
         }
 
         setIsSaving(true);
         try {
-            await api.createTeacherAssignment(user.teacher_id, selectedSubjectId);
+            await api.createTeacherAssignment(user.teacher_id, selectedSectionId, selectedCatalogId);
             toast.success("Assignment added!");
             setIsDialogOpen(false);
             resetForm();
             fetchData();
         } catch (e: any) {
+            console.error(e);
             toast.error(e.message || "Failed to add assignment");
         } finally {
             setIsSaving(false);
@@ -128,14 +152,14 @@ const Batches = () => {
         setSelectedFacultyId("");
         setSelectedBatchId("");
         setSelectedSectionId("");
-        setSelectedSubjectId("");
+        setSelectedCatalogId("");
     };
 
     const handleClassClick = async (assignment: any) => {
         setSelectedClass(assignment);
         setIsFetchingStudents(true);
         try {
-            const students = await api.getStudentsBySection(assignment.subject?.section_id);
+            const students = await api.getStudentsBySection(assignment.section_id);
             setClassStudents(students || []);
         } catch (e) {
             useToastHook({ title: "Error", description: "Failed to load students", variant: "destructive" });
@@ -171,7 +195,7 @@ const Batches = () => {
                         <div className="grid gap-3 py-2">
                             <div className="grid gap-2">
                                 <Label className="text-sm">Department</Label>
-                                <Select value={selectedFacultyId} onValueChange={(v) => { setSelectedFacultyId(v); setSelectedBatchId(""); setSelectedSectionId(""); setSelectedSubjectId(""); }}>
+                                <Select value={selectedFacultyId} onValueChange={(v) => { setSelectedFacultyId(v); setSelectedBatchId(""); setSelectedSectionId(""); setSelectedCatalogId(""); }}>
                                     <SelectTrigger className="h-9">
                                         <SelectValue placeholder="Select Department" />
                                     </SelectTrigger>
@@ -183,19 +207,19 @@ const Batches = () => {
 
                             <div className="grid gap-2">
                                 <Label className="text-sm">Batch</Label>
-                                <Select value={selectedBatchId} onValueChange={(v) => { setSelectedBatchId(v); setSelectedSectionId(""); setSelectedSubjectId(""); }} disabled={!selectedFacultyId}>
+                                <Select value={selectedBatchId} onValueChange={(v) => { setSelectedBatchId(v); setSelectedSectionId(""); setSelectedCatalogId(""); }} disabled={!selectedFacultyId}>
                                     <SelectTrigger className="h-9">
                                         <SelectValue placeholder="Select Batch" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        {filteredBatches.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
+                                        {filteredBatches.map(b => <SelectItem key={b.id} value={b.id}>{b.name} (Sem {b.current_semester})</SelectItem>)}
                                     </SelectContent>
                                 </Select>
                             </div>
 
                             <div className="grid gap-2">
                                 <Label className="text-sm">Section</Label>
-                                <Select value={selectedSectionId} onValueChange={(v) => { setSelectedSectionId(v); setSelectedSubjectId(""); }} disabled={!selectedBatchId}>
+                                <Select value={selectedSectionId} onValueChange={setSelectedSectionId} disabled={!selectedBatchId}>
                                     <SelectTrigger className="h-9">
                                         <SelectValue placeholder="Select Section" />
                                     </SelectTrigger>
@@ -206,20 +230,28 @@ const Batches = () => {
                             </div>
 
                             <div className="grid gap-2">
-                                <Label className="text-sm">Subject</Label>
-                                <Select value={selectedSubjectId} onValueChange={setSelectedSubjectId} disabled={!selectedSectionId}>
+                                <Label className="text-sm">Subject (from Catalog)</Label>
+                                <Select value={selectedCatalogId} onValueChange={setSelectedCatalogId} disabled={!selectedBatchId}>
                                     <SelectTrigger className="h-9">
                                         <SelectValue placeholder="Select Subject" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        {filteredSubjects.map(sub => <SelectItem key={sub.id} value={sub.id} className="text-sm">{sub.name} ({sub.code})</SelectItem>)}
+                                        {catalogSubjects.length === 0 ? (
+                                            <SelectItem value="none" disabled>No subjects found for this semester</SelectItem>
+                                        ) : (
+                                            catalogSubjects.map(sub => (
+                                                <SelectItem key={sub.id} value={sub.id}>
+                                                    {sub.subject_name} ({sub.subject_code})
+                                                </SelectItem>
+                                            ))
+                                        )}
                                     </SelectContent>
                                 </Select>
                             </div>
                         </div>
                         <DialogFooter className="gap-2 sm:gap-0">
                             <Button variant="outline" onClick={() => setIsDialogOpen(false)} className="flex-1 sm:flex-none">Cancel</Button>
-                            <Button onClick={handleAddAssignment} disabled={!selectedSubjectId || isSaving} className="flex-1 sm:flex-none">
+                            <Button onClick={handleAddAssignment} disabled={!selectedCatalogId || !selectedSectionId || isSaving} className="flex-1 sm:flex-none">
                                 {isSaving ? "Adding..." : "Add"}
                             </Button>
                         </DialogFooter>
@@ -243,8 +275,8 @@ const Batches = () => {
                         <div className="grid gap-3 sm:gap-4 md:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
                             {assignedClasses
                                 .filter(a =>
-                                    a.subject?.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                                    a.subject?.code?.toLowerCase().includes(searchQuery.toLowerCase())
+                                    a.course_catalog?.subject_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                                    a.course_catalog?.subject_code?.toLowerCase().includes(searchQuery.toLowerCase())
                                 )
                                 .map((assignment) => (
                                     <Card
@@ -255,12 +287,12 @@ const Batches = () => {
                                             <div className="flex items-start justify-between gap-2">
                                                 <CardTitle className="flex items-center gap-2 text-base md:text-lg leading-tight">
                                                     <BookOpen className="w-4 h-4 md:w-5 md:h-5 text-primary shrink-0" />
-                                                    <span className="truncate">{assignment.subject?.name}</span>
+                                                    <span className="truncate">{assignment.course_catalog?.subject_name}</span>
                                                 </CardTitle>
                                                 <Button
                                                     variant="ghost"
                                                     size="icon"
-                                                    className="text-destructive hover:text-destructive hover:bg-destructive/10 opacity- group-hover:opacity-100 transition-opacity h-8 w-8 shrink-0"
+                                                    className="text-destructive hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-opacity h-8 w-8 shrink-0"
                                                     onClick={(e) => {
                                                         e.stopPropagation();
                                                         handleDeleteAssignment(assignment.id);
@@ -270,18 +302,23 @@ const Batches = () => {
                                                 </Button>
                                             </div>
                                             <CardDescription className="text-xs truncate">
-                                                {assignment.subject?.code}
+                                                {assignment.course_catalog?.subject_code}
                                             </CardDescription>
                                         </CardHeader>
                                         <CardContent className="pt-0" onClick={() => handleClassClick(assignment)}>
                                             <div className="space-y-1.5">
                                                 <div className="flex items-center gap-2 text-xs sm:text-sm">
-                                                    <GraduationCap className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                                                    <span className="font-medium truncate">{assignment.subject?.section?.batch?.name}</span>
+                                                    <Calendar className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                                                    <span className="font-medium truncate">
+                                                        {assignment.section?.batch?.name}
+                                                        <span className="text-muted-foreground font-normal ml-1">
+                                                            (Sem {assignment.section?.batch?.current_semester})
+                                                        </span>
+                                                    </span>
                                                 </div>
                                                 <div className="flex items-center gap-2 text-xs sm:text-sm text-muted-foreground">
                                                     <Users className="w-3.5 h-3.5 shrink-0" />
-                                                    <span className="truncate">Section {assignment.subject?.section?.name}</span>
+                                                    <span className="truncate">Section {assignment.section?.name}</span>
                                                 </div>
                                             </div>
                                         </CardContent>
@@ -317,7 +354,7 @@ const Batches = () => {
                         <DialogDescription className="text-xs sm:text-sm line-clamp-2">
                             {selectedClass && (
                                 <>
-                                    {selectedClass.subject?.name} - {selectedClass.subject?.section?.batch?.name} ({selectedClass.subject?.section?.name})
+                                    {selectedClass.course_catalog?.subject_name} - {selectedClass.section?.batch?.name} ({selectedClass.section?.name})
                                 </>
                             )}
                         </DialogDescription>

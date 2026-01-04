@@ -45,6 +45,7 @@ const UserManagement = () => {
             ]);
             setStudents(studentsData || []);
             setTeachers(teachersData || []);
+            // console.log("Debug students", studentsData);
         } catch (error) {
             console.error("Failed to fetch users", error);
             toast({ title: "Error", description: "Failed to load users", variant: "destructive" });
@@ -135,7 +136,14 @@ const UserManagement = () => {
                                             </div>
                                         </TableCell>
                                         <TableCell className="hidden md:table-cell">
-                                            {student.section?.batch?.name || '-'}
+                                            {student.section?.batch ? (
+                                                <div className="flex flex-col">
+                                                    <span>{student.section.batch.name}</span>
+                                                    <span className="text-xs text-muted-foreground">
+                                                        Sem {student.section.batch.current_semester}
+                                                    </span>
+                                                </div>
+                                            ) : '-'}
                                         </TableCell>
                                         <TableCell className="hidden md:table-cell">
                                             {student.section?.name || '-'}

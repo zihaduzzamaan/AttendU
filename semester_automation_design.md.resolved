@@ -1,0 +1,82 @@
+# Semester Automation Design: "The End Semester Button"
+
+## 1. Overview
+The "End Semester" feature automates the transition of the university's academic timeline. Instead of manually creating subjects and batches every 6 months, this system allows an Admin to click a single button to:
+1.  **Promote** all current batches to their next semester (e.g., Batch 47: Sem 1 → Sem 2).
+2.  **Archive** graduated batches.
+3.  **Create** a new incoming batch automatically (e.g., Batch 48: Sem 1).
+4.  **Reset** teacher assignments (since subjects change).
+5.  **Auto-Assign** the correct subjects for the new semester from a master `Course Catalog`.
+
+---
+
+## 2. Database Schema Changes
+
+### A. New Table: `course_catalog`
+This table acts as the "Master Template" for subjects. It defines what subjects *should* be taught in each semester.
+
+| Column Name | Data Type | Description |
+| :--- | :--- | :--- |
+| [id](file:///c:/Users/arefi/OneDrive/Desktop/Attendance%20prototype/frontend/src/contexts/AuthContext.tsx#27-320) | `uuid` | Primary Key |
+| `faculty_id` | `bigint` | FK to `faculties` (e.g., SWE) |
+| `semester_level` | `int` | The semester number (1-8) |
+| `subject_name` | [text](file:///c:/Users/arefi/OneDrive/Desktop/Attendance%20prototype/frontend/src/contexts/AuthContext.tsx#6-17) | e.g., "Data Structures" |
+| `subject_code` | [text](file:///c:/Users/arefi/OneDrive/Desktop/Attendance%20prototype/frontend/src/contexts/AuthContext.tsx#6-17) | e.g., "DS-201" |
+| `is_lab` | `boolean` | True if it's a lab course |
+
+**Example Data:**
+- Sem 1: Computer Fundamentals, English, Math-I
+- Sem 2: Structured Programming, Physics, Math-II
+
+### B. Modified Table: `batches`
+We need to track which semester a batch is currently in.
+
+| Column Name | Data Type | New/Existing | Description |
+| :--- | :--- | :--- | :--- |
+| `current_semester` | `int` | **[NEW]** | Current semester level (1-8). Default: 1 |
+| `is_graduated` | `boolean` | **[NEW]** | True if they passed Sem 8 |
+
+---
+
+## 3. The "End Semester" Logic (Automation)
+
+This logic will be encapsulated in a PostgreSQL function (e.g., `end_semester_for_faculty(faculty_id)`) to ensure data integrity.
+
+### Step-by-Step Execution:
+
+1.  **Clear Assignments**:
+    *   `DELETE FROM teacher_assignments WHERE ...`
+    *   *Reason*: Teachers' schedules change every semester. Old assignments are invalid.
+
+2.  **Promote Existing Batches**:
+    *   **Loop** through all active batches for the faculty.
+    *   **Increment**: `current_semester = current_semester + 1`.
+    *   **Graduate**: If `current_semester > 8`, set `is_graduated = TRUE`.
+
+3.  **Populate New Subjects**:
+    *   For each promoted batch (that didn't graduate):
+        *   Look up `course_catalog` for their **NEW** `semester_level`.
+        *   **Insert** those subjects into the `subjects` table for this batch.
+        *   (Crucial: This links the abstract "Catalog Subject" to the concrete "Batch Section").
+
+4.  **Create New Batch**:
+    *   Find the latest batch name (e.g., "47").
+    *   Create **New Batch** (e.g., "48") with `current_semester = 1`.
+    *   **Create Default Section** (Section "A").
+    *   **Insert Subjects**: Fetch Semester 1 subjects from `course_catalog` and insert for Batch 48.
+
+---
+
+## 4. Impact on User Panels
+
+### Student Panel
+*   **Instant Update**: As soon as the button is clicked, students will see their **new semester's subjects** in their dashboard.
+*   **Clean Slate**: Attendance history for the *new* subjects starts at 0%. (Old attendance records remain in the database for history/transcripts).
+
+### Teacher Panel
+*   **Assignments Cleared**: Teachers will see an empty "My Batches" list.
+*   **Action Required**: Teachers (or Admins) simply re-assign themselves to the new subjects (which are already created and waiting!).
+
+### Admin Panel
+*   **New UI**: A "Semester Management" tab in Academic Structure.
+*   **Controls**: A big, red "End Semester" button with a confirmation modal ("Are you sure? This will promote all batches...").

@@ -621,17 +621,44 @@ const AuthPage = () => {
                         <Select
                           value={currentAssignment.subjectId}
                           onValueChange={(v) => setCurrentAssignment({ ...currentAssignment, subjectId: v })}
-                          disabled={!currentAssignment.sectionId}
+                          disabled={!currentAssignment.batchId}
                         >
                           <SelectTrigger className="text-[10px] px-1 h-8">
                             <SelectValue placeholder="Subj" />
                           </SelectTrigger>
                           <SelectContent>
-                            {assignmentSubjects.map(subject => (
-                              <SelectItem key={subject.id} value={subject.id}>
-                                {subject.name}
-                              </SelectItem>
-                            ))}
+                            {subjects.length > 0 && currentAssignment.batchId ? (
+                              (() => {
+                                // 1. Get all subjects belonging to ANY section in this batch
+                                const batchSectionIds = sections
+                                  .filter(s => s.batch_id === currentAssignment.batchId)
+                                  .map(s => s.id);
+
+                                const batchSubjects = subjects.filter(sub => batchSectionIds.includes(sub.section_id));
+
+                                // 2. Deduplicate by Name + Code
+                                const uniqueMap = new Map();
+                                batchSubjects.forEach(sub => {
+                                  const key = `${sub.code}-${sub.name}`;
+                                  if (!uniqueMap.has(key)) {
+                                    uniqueMap.set(key, sub);
+                                  }
+                                });
+                                const uniqueSubjects = Array.from(uniqueMap.values());
+
+                                if (uniqueSubjects.length === 0) {
+                                  return <SelectItem value="none" disabled>No subjects found for batch</SelectItem>
+                                }
+
+                                return uniqueSubjects.map(subject => (
+                                  <SelectItem key={subject.id} value={subject.id}>
+                                    {subject.name} ({subject.code})
+                                  </SelectItem>
+                                ));
+                              })()
+                            ) : (
+                              <SelectItem value="none" disabled>Select Batch first</SelectItem>
+                            )}
                           </SelectContent>
                         </Select>
                       </div>

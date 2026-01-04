@@ -3,9 +3,16 @@ import { UserRole } from '@/types';
 
 // Types (Mirroring DB Schema)
 export interface Faculty { id: string; name: string; }
-export interface Batch { id: string; faculty_id: string; name: string; }
+export interface Batch { id: string; faculty_id: string; name: string; current_semester: number; is_graduated: boolean; }
 export interface Section { id: string; batch_id: string; name: string; }
-export interface Subject { id: string; section_id: string; name: string; code: string; }
+export interface CourseCatalogItem {
+  id: string;
+  faculty_id: string;
+  semester_level: number;
+  subject_name: string;
+  subject_code: string;
+  is_lab: boolean;
+}
 export interface Profile { id: string; email: string; name: string; role: UserRole; }
 
 export const api = {
@@ -67,19 +74,60 @@ export const api = {
     return data as Section;
   },
 
-  getSubjects: async (sectionId?: string) => {
-    let query = supabase.from('subjects').select('*').order('name');
-    if (sectionId) query = query.eq('section_id', sectionId);
-    const { data, error } = await query;
+  endSemester: async (deptId: string) => {
+    const { error } = await supabase.rpc('end_semester', { dept_id: deptId });
     if (error) throw error;
-    return data as Subject[];
   },
 
-  createSubject: async (sectionId: string, name: string, code: string) => {
-    const { data, error } = await supabase.from('subjects').insert([{ section_id: sectionId, name, code }]).select().single();
+  // === REFACTORED: SUBJECTS & CATALOG ===
+
+  // Get Catalog Items (Global List)
+  getCourseCatalog: async (facultyId?: string, semester?: number) => {
+    let query = supabase.from('course_catalog').select('*, faculty:faculties(name)').order('semester_level').order('subject_name');
+    if (facultyId) query = query.eq('faculty_id', facultyId);
+    if (semester) query = query.eq('semester_level', semester);
+    const { data, error } = await query;
     if (error) throw error;
-    return data as Subject;
+    return data as CourseCatalogItem[];
   },
+
+  createCatalogSubject: async (facultyId: string, semester: number, name: string, code: string) => {
+    const { data, error } = await supabase.from('course_catalog').insert([{ faculty_id: facultyId, semester_level: semester, subject_name: name, subject_code: code }]).select().single();
+    if (error) throw error;
+    return data;
+  },
+
+  deleteCatalogSubject: async (id: string) => {
+    const { error } = await supabase.from('course_catalog').delete().eq('id', id);
+    if (error) throw error;
+  },
+
+  // Used by Teacher Assignment / Routines to find what subjects can be taught to a text
+  getSubjectsForSection: async (sectionId: string) => {
+    // 1. Get Section -> Batch info to know semester and faculty
+    const { data: section, error: secError } = await supabase
+      .from('sections')
+      .select('batch_id, batch:batches(faculty_id, current_semester)')
+      .eq('id', sectionId)
+      .single();
+
+    if (secError) throw secError;
+    if (!section || !section.batch) return [];
+
+    const batch = section.batch as any; // Type assertion
+
+    // 2. Fetch Catalog items for that Faculty + Semester
+    const { data, error } = await supabase
+      .from('course_catalog')
+      .select('*')
+      .eq('faculty_id', batch.faculty_id)
+      .eq('semester_level', batch.current_semester)
+      .order('subject_name');
+
+    if (error) throw error;
+    return data as CourseCatalogItem[];
+  },
+
 
   // Users
   getProfiles: async (role?: UserRole) => {
@@ -95,7 +143,7 @@ export const api = {
       *,
       profile:profiles!profile_id(email, name, role),
       section:sections(name,
-        batch:batches(name, faculty_id)
+        batch:batches(name, faculty_id, current_semester)
       )
     `);
     if (error) throw error;
@@ -135,35 +183,33 @@ export const api = {
   },
 
   getTeacherAssignments: async (teacherId: string) => {
+    // Updated to use catalog and sections directly
     const { data, error } = await supabase
       .from('teacher_assignments')
       .select(`
         *,
-        subject:subjects(
+        course_catalog:course_catalog_id (*),
+        section:sections(
           *,
-          section:sections(
-            *,
-            batch:batches(*)
-          )
+          batch:batches(*)
         )
       `)
       .eq('teacher_id', teacherId);
     if (error) throw error;
+    // Map it to a cleaner structure if needed, or update frontend to use .course_catalog.subject_name
     return data;
   },
 
-  createTeacherAssignment: async (teacherId: string, subjectId: string) => {
+  createTeacherAssignment: async (teacherId: string, sectionId: string, catalogId: string) => {
     const { data, error } = await supabase
       .from('teacher_assignments')
-      .insert([{ teacher_id: teacherId, subject_id: subjectId }])
+      .insert([{ teacher_id: teacherId, section_id: sectionId, course_catalog_id: catalogId }])
       .select(`
         *,
-        subject:subjects(
+        course_catalog:course_catalog_id (*),
+        section:sections(
           *,
-          section:sections(
-            *,
-            batch:batches(*)
-          )
+          batch:batches(*)
         )
       `)
       .single();
@@ -208,13 +254,13 @@ export const api = {
   getRoutines: async (filters?: { teacher_id?: string; day?: string }) => {
     let query = supabase.from('routines').select(`
       *,
-      subject:subjects(
-        name, 
-        code,
-        section:sections(
+      course_catalog:course_catalog_id (
+        subject_name,
+        subject_code
+      ),
+      section:sections(
           name,
-          batch:batches(name, faculty_id)
-        )
+          batch:batches(name, faculty_id, current_semester)
       ),
       teacher:teachers!teacher_id(
         profile:profiles!profile_id(name)
@@ -247,12 +293,15 @@ export const api = {
     if (error) throw error;
   },
 
-  getAttendance: async (filters?: { student_id?: string; subject_id?: string; date?: string }) => {
-    let query = supabase.from('attendance_logs').select('*').order('timestamp', { ascending: false });
+  getAttendance: async (filters?: { student_id?: string; routine_id?: string; date?: string }) => {
+    let query = supabase.from('attendance_logs').select('*').order('created_at', { ascending: false });
 
     if (filters?.student_id) query = query.eq('student_id', filters.student_id);
-    if (filters?.subject_id) query = query.eq('subject_id', filters.subject_id);
-    if (filters?.date) query = query.eq('date', filters.date);
+    // Updated: Attendance logs now link to routines, which imply subjects.
+    // If we need to filter by 'subject', we have to filter by routines that have that subject.
+    // But logs usually just filter by routine_id (session) or date.
+    if (filters?.routine_id) query = query.eq('routine_id', filters.routine_id);
+    // if (filters?.date) ... Date is inside created_at timestamp usually, handling that might be complex if not just 'eq'
 
     const { data, error } = await query;
     if (error) throw error;
@@ -260,29 +309,47 @@ export const api = {
   },
 
   getAttendanceHistory: async (filters?: { teacher_id?: string; student_id?: string; section_id?: string }) => {
+    // This query is complex. We are linking Logs -> Routine -> Catalog/Section
     let query = supabase.from('attendance_logs').select(`
       *,
       student:students(
-        student_id,
+        id,
         profile:profiles(name)
       ),
       routine:routines(
         day_of_week,
         start_time,
         end_time,
-        teacher_id
-      ),
-      subject:subjects(name, code, section_id)
-    `).order('date', { ascending: false });
+        teacher_id,
+        course_catalog:course_catalog_id(subject_name, subject_code),
+        section:sections(name, batch:batches(name))
+      )
+    `).order('created_at', { ascending: false });
 
-    if (filters.teacher_id) {
-      query = query.eq('routine.teacher_id', filters.teacher_id);
+    if (filters?.teacher_id) {
+      // Logic for teacher: My Routines
+      // We can filter on the inner join but Supabase (Postgrest) filtering deep relations is tricky.
+      // Usually better to filter by routine_id list OR use !inner join.
+      // For now, let's try !inner on routine
+      query = supabase.from('attendance_logs').select(`
+        *,
+        student:students(
+          id,
+          profile:profiles(name)
+        ),
+        routine:routines!inner(
+          teacher_id,
+          day_of_week,
+          start_time,
+          end_time,
+          course_catalog:course_catalog_id(subject_name, subject_code),
+          section:sections(name, batch:batches(name))
+        )
+      `).eq('routine.teacher_id', filters.teacher_id).order('created_at', { ascending: false });
     }
-    if (filters.student_id) {
+
+    if (filters?.student_id) {
       query = query.eq('student_id', filters.student_id);
-    }
-    if (filters.section_id) {
-      query = query.eq('subject.section_id', filters.section_id);
     }
 
     const { data, error } = await query;
@@ -302,11 +369,11 @@ export const api = {
   },
 
   getStats: async () => {
-    const [students, teachers, batches, subjects, routines] = await Promise.all([
+    const [students, teachers, batches, catalog, routines] = await Promise.all([
       supabase.from('students').select('*', { count: 'exact', head: true }),
       supabase.from('teachers').select('*', { count: 'exact', head: true }),
       supabase.from('batches').select('*', { count: 'exact', head: true }),
-      supabase.from('subjects').select('*', { count: 'exact', head: true }),
+      supabase.from('course_catalog').select('*', { count: 'exact', head: true }),
       supabase.from('routines').select('*', { count: 'exact', head: true }),
     ]);
 
@@ -314,7 +381,7 @@ export const api = {
       totalStudents: students.count || 0,
       totalTeachers: teachers.count || 0,
       totalBatches: batches.count || 0,
-      totalSubjects: subjects.count || 0,
+      totalSubjects: catalog.count || 0,
       todaySessions: routines.count || 0,
     };
   },
