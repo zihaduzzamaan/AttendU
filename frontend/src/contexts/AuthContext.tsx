@@ -332,11 +332,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 const LoadingScreen = () => {
   const [messageIndex, setMessageIndex] = useState(0);
   const messages = [
-    "Securing your connection...",
-    "Syncing academic records...",
-    "Preparing your dashboard...",
-    "Authenticating credentials...",
-    "Almost there..."
+    "Register your face once...",
+    "Teacher takes a class photo...",
+    "Boom! Attendance is done.",
+    "No more manual roll calls...",
+    "No more shouting in class.",
+    "Revolutionizing tracking..."
   ];
 
   useEffect(() => {
@@ -389,8 +390,7 @@ const LoadingScreen = () => {
       {/* Footer Branding */}
       <div className="absolute bottom-10 left-0 w-full text-center">
         <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground/40 font-bold">
-          Powered by Advanced Agentic Coding
-        </p>
+          Developed by Zihad (The Dev)        </p>
       </div>
     </div>
   );
