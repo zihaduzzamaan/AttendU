@@ -323,7 +323,7 @@ const TakeAttendance = () => {
 
         detectionInterval.current = setInterval(async () => {
             // Early check
-            if (!videoRef.current || !canvasRef.current || !active) return;
+            if (!videoRef.current || !canvasRef.current) return;
 
             try {
                 // Capture current video frame
@@ -345,7 +345,7 @@ const TakeAttendance = () => {
                     canvas.toBlob((b) => resolve(b), 'image/jpeg', 0.8);
                 });
 
-                if (!videoRef.current || !active) return; // Check again after await
+                if (!videoRef.current) return; // Check again after await
 
                 if (!blob) {
                     console.warn("⚠️ Could not capture frame blob, skipping...");
@@ -355,7 +355,7 @@ const TakeAttendance = () => {
                 // Send to Python backend for recognition
                 const result = await api.recognizeFaces(blob);
 
-                if (!videoRef.current || !active) return; // Check again after network request
+                if (!videoRef.current) return; // Check again after network request
 
                 setBackendStatus('online'); // Connection verified
 
