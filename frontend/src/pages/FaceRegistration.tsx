@@ -167,9 +167,9 @@ const FaceRegistration = () => {
           if (isCentered && !isCapturingAuto && stable) {
             if (livenessStep === 'front' && Math.abs(currentYaw - 0.5) < 0.1) {
               autoCaptureBurst('front');
-            } else if (livenessStep === 'left' && currentYaw < 0.35) {
+            } else if (livenessStep === 'left' && currentYaw > 0.65) {
               autoCaptureBurst('left');
-            } else if (livenessStep === 'right' && currentYaw > 0.65) {
+            } else if (livenessStep === 'right' && currentYaw < 0.35) {
               autoCaptureBurst('right');
             }
           }
@@ -197,7 +197,7 @@ const FaceRegistration = () => {
 
     if (stage === 'capturing') track();
     return () => { active = false; };
-  }, [stage, modelsLoaded, livenessStep]);
+  }, [stage, modelsLoaded, livenessStep, isCapturingAuto]);
 
   // Helpers
   const calculateStability = (history: { x: number, y: number }[]) => {
@@ -216,7 +216,7 @@ const FaceRegistration = () => {
     const distLeft = Math.abs(noseTip.x - leftEyeInner.x);
     const distRight = Math.abs(noseTip.x - rightEyeInner.x);
 
-    // Returns 0.5 when centered, < 0.5 when turned left, > 0.5 when turned right
+    // Returns 0.5 when centered, > 0.5 when turned left (subject's left), < 0.5 when turned right
     return distLeft / (distLeft + distRight);
   };
 
@@ -259,7 +259,11 @@ const FaceRegistration = () => {
       await new Promise(r => setTimeout(r, 200)); // Short gap between burst frames
     }
 
-    setCapturedImages(prev => [...prev, ...newFrames]);
+    setCapturedImages(prev => {
+      // Safety check to prevent over-capturing
+      if (prev.length >= TOTAL_CAPTURES) return prev;
+      return [...prev, ...newFrames];
+    });
 
     if (pose === 'front') setLivenessStep('left');
     else if (pose === 'left') setLivenessStep('right');
@@ -267,7 +271,6 @@ const FaceRegistration = () => {
 
     setIsCapturingAuto(false);
   };
-
 
 
 
@@ -561,10 +564,10 @@ const FaceRegistration = () => {
                 <div className="flex justify-between items-center px-2">
                   <span className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Session Progress</span>
                   <span className="text-xs font-black text-primary bg-primary/10 px-2 py-0.5 rounded-full">
-                    {Math.floor((capturedImages.length / TOTAL_CAPTURES) * 100)}%
+                    {Math.min(100, Math.floor((capturedImages.length / TOTAL_CAPTURES) * 100))}%
                   </span>
                 </div>
-                <Progress value={(capturedImages.length / TOTAL_CAPTURES) * 100} className="h-3 rounded-full" />
+                <Progress value={Math.min(100, (capturedImages.length / TOTAL_CAPTURES) * 100)} className="h-3 rounded-full" />
 
                 <div className="grid grid-cols-3 gap-2 py-2">
                   <div className={`p-2 rounded-xl border transition-all ${capturedImages.length >= 1 ? 'bg-green-50 border-green-200' : 'bg-muted border-transparent'}`}>
