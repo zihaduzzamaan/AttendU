@@ -452,7 +452,7 @@ export const api = {
     }
   },
 
-  recognizeFaces: async (imageBlob: Blob, knownEmbeddings: Record<string, number[]>) => {
+  recognizeFaces: async (imageBlob: Blob) => {
     // UPDATE THIS URL after creating your Hugging Face Space
     // Format: https://[username]-[spacename].hf.space
     const PYTHON_BACKEND = 'https://arefintitly-attendu-server.hf.space';
@@ -464,9 +464,8 @@ export const api = {
       }
       const formData = new FormData();
       formData.append('image', imageBlob, 'capture.jpg');
-      formData.append('known_embeddings', JSON.stringify(knownEmbeddings));
 
-      console.log(`📤 Sending recognition request (Image: ${imageBlob.size} bytes, Known Embeddings: ${Object.keys(knownEmbeddings).length})`);
+      console.log(`📤 Sending recognition request (Image: ${imageBlob.size} bytes)`);
       const response = await fetch(`${PYTHON_BACKEND}/api/face/recognize`, {
         method: 'POST',
         body: formData,
@@ -480,7 +479,25 @@ export const api = {
 
       const result = await response.json();
       console.log('✅ Recognition API response:', result);
-      return result;
+
+      // ADAPTER: Transform new backend response (single face) to old frontend format (list of matches)
+      // Backend returns: { success: true, student_id: "...", distance: 0.45, confidence: 0.88, message: "..." }
+      if (result.success && result.student_id) {
+        return {
+          detected_faces: 1,
+          matches: [{
+            student_id: result.student_id,
+            confidence: result.confidence || 0.95 // Fallback confidence
+          }]
+        };
+      } else {
+        // No match found or no face detected
+        return {
+          detected_faces: 0,
+          matches: []
+        };
+      }
+
     } catch (error) {
       console.error('Error calling Python backend:', error);
       throw error;

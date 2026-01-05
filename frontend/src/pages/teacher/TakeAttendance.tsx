@@ -87,7 +87,8 @@ const TakeAttendance = () => {
     // Kept for reference
     const MATCH_THRESHOLD = 0.6;
     const recognizedStudentsRef = useRef<Set<string>>(new Set());
-    const knownEmbeddingsRef = useRef<Record<string, number[]>>({});
+    const knownEmbeddingsRef = useRef<Record<string, number[]>>({}); // Deprecated but kept to avoid breaking other logic temporarily
+
 
     // 📸 Camera Lifecycle Management
     useEffect(() => {
@@ -195,7 +196,7 @@ const TakeAttendance = () => {
 
             for (const img of capturedImages) {
                 try {
-                    const result = await api.recognizeFaces(img.blob, knownEmbeddingsRef.current);
+                    const result = await api.recognizeFaces(img.blob);
                     setBackendStatus('online'); // Connection successful
                     totalDetected += (result.detected_faces || 0);
 
@@ -306,17 +307,8 @@ const TakeAttendance = () => {
 
         console.log(`🔍 Starting recognition with ${studentsWithEmbeddings.length}/${students.length} students having embeddings`);
 
-        // Build known embeddings dictionary
-        const knownEmbeddings: Record<string, number[]> = {};
-        studentsWithEmbeddings.forEach(s => {
-            const embedding = typeof s.face_embedding === 'string'
-                ? JSON.parse(s.face_embedding)
-                : s.face_embedding;
-            knownEmbeddings[String(s.id)] = embedding;
-        });
-
-        // Store in ref for upload handler
-        knownEmbeddingsRef.current = knownEmbeddings;
+        // knownEmbeddings not needed for server-side recognition
+        // knownEmbeddingsRef.current = knownEmbeddings;
         setIsTracking(true);
 
         detectionInterval.current = setInterval(async () => {
@@ -343,7 +335,7 @@ const TakeAttendance = () => {
                 }
 
                 // Send to Python backend for recognition
-                const result = await api.recognizeFaces(blob, knownEmbeddings);
+                const result = await api.recognizeFaces(blob);
                 setBackendStatus('online'); // Connection verified
 
                 setDetectedCount(result.detected_faces || 0);
@@ -439,12 +431,8 @@ const TakeAttendance = () => {
                 } catch { return false; }
             });
 
-            const knownEmbeddings: Record<string, number[]> = {};
-            studentsWithEmbeddings.forEach(s => {
-                const embedding = typeof s.face_embedding === 'string' ? JSON.parse(s.face_embedding) : s.face_embedding;
-                knownEmbeddings[String(s.id)] = embedding;
-            });
-            knownEmbeddingsRef.current = knownEmbeddings;
+            // knownEmbeddings calculation removed - handled by backend
+
 
             // 2. Switch to Camera Step (useEffect will start the hardware)
             setStep('camera');

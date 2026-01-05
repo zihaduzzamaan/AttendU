@@ -12,6 +12,9 @@ RUN apt-get update && apt-get install -y \
     libsm6 \
     libxext6 \
     libxrender-dev \
+    build-essential \
+    g++ \
+    cmake \
     && rm -rf /var/lib/apt/lists/*
 
 # Set the working directory in the container
@@ -23,6 +26,9 @@ RUN useradd -m -u 1000 user
 USER user
 ENV HOME=/home/user \
     PATH=/home/user/.local/bin:$PATH
+
+# Upgrade pip and install build dependencies
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel cython
 
 # Copy requirements and install dependencies
 COPY --chown=user requirements.txt .

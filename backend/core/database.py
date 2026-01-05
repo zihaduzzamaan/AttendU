@@ -1,5 +1,5 @@
 from supabase import create_client, Client
-from backend.core.config import settings
+from core.config import settings
 
 class SupabaseDB:
     client: Client = None
