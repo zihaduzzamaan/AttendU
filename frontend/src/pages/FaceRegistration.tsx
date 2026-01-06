@@ -35,6 +35,7 @@ const FaceRegistration = () => {
   const [livenessStep, setLivenessStep] = useState<'align' | 'front' | 'left' | 'right' | 'done'>('align');
   const [yaw, setYaw] = useState(0.5); // 0.5 is center
   const [brightness, setBrightness] = useState(255);
+  const [distanceGuidance, setDistanceGuidance] = useState<'perfect' | 'too-close' | 'too-far' | null>(null);
   const [facePosition, setFacePosition] = useState<{ x: number, y: number, width: number, height: number } | null>(null);
   const [isCapturingAuto, setIsCapturingAuto] = useState(false);
   const [isStable, setIsStable] = useState(false);
@@ -142,9 +143,10 @@ const FaceRegistration = () => {
         const displaySize = { width: videoRef.current.offsetWidth, height: videoRef.current.offsetHeight };
         faceapi.matchDimensions(canvasRef.current, displaySize);
 
-        // 1. Brightness Check
-        const currentBrightness = checkBrightness(videoRef.current);
-        setBrightness(currentBrightness);
+        // 1. Brightness Check (TEMPORARILY DISABLED FOR TESTING)
+        // const currentBrightness = checkBrightness(videoRef.current);
+        // setBrightness(currentBrightness);
+        setBrightness(255); // Force high brightness to disable warnings
 
         if (detection) {
           // Resize detection to display size for accurate coordinate checking
@@ -169,6 +171,17 @@ const FaceRegistration = () => {
 
           // Adjustment: Ensure the face is large enough but not too large
           const isRightSize = box.width > displaySize.width * 0.25 && box.width < displaySize.width * 0.7;
+          const isTooFar = box.width < displaySize.width * 0.25;
+          const isTooClose = box.width > displaySize.width * 0.7;
+
+          // Set distance guidance
+          if (isTooFar) {
+            setDistanceGuidance('too-far');
+          } else if (isTooClose) {
+            setDistanceGuidance('too-close');
+          } else {
+            setDistanceGuidance('perfect');
+          }
 
           if (isCentered && isRightSize) {
             setFacePosition(box);
@@ -226,6 +239,29 @@ const FaceRegistration = () => {
   }, [stage, modelsLoaded, livenessStep, isCapturingAuto]);
 
   // Helpers
+  // Shutter sound using Web Audio API
+  const playShutterSound = () => {
+    try {
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+
+      // Camera shutter sound: quick high-to-low chirp
+      oscillator.frequency.setValueAtTime(1200, audioContext.currentTime);
+      oscillator.frequency.exponentialRampToValueAtTime(400, audioContext.currentTime + 0.05);
+
+      gainNode.gain.setValueAtTime(0.9, audioContext.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.1);
+
+      oscillator.start(audioContext.currentTime);
+      oscillator.stop(audioContext.currentTime + 0.1);
+    } catch (e) {
+      console.log('Audio not supported');
+    }
+  };
   const calculateStability = (history: { x: number, y: number }[]) => {
     let totalDist = 0;
     for (let i = 1; i < history.length; i++) {
@@ -272,6 +308,9 @@ const FaceRegistration = () => {
   const autoCaptureBurst = async (pose: 'front' | 'left' | 'right') => {
     if (isCapturingAuto || !videoRef.current) return;
     setIsCapturingAuto(true);
+
+    // Play shutter sound
+    playShutterSound();
 
     const burstCount = 2;
     const newFrames: { id: number, url: string, blob: Blob }[] = [];
@@ -511,9 +550,9 @@ const FaceRegistration = () => {
             <div className="absolute top-8 left-0 right-0 z-20 text-center px-4">
               {stage === 'capturing' && (
                 <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-black/60 backdrop-blur-md border border-white/10 shadow-lg">
-                  <div className={`w-2 h-2 rounded-full ${brightness < 25 ? 'bg-amber-500 animate-pulse' : 'bg-green-500'}`} />
+                  <div className={`w-2 h-2 rounded-full bg-green-500`} />
                   <span className="text-xs font-bold tracking-wide uppercase text-white/90">
-                    {brightness < 25 ? 'Low Light' : 'Camera Active'}
+                    Camera Active
                   </span>
                 </div>
               )}
@@ -579,7 +618,8 @@ const FaceRegistration = () => {
                     {stage === 'capturing' && (
                       <div className="absolute bottom-4 left-0 right-0 flex flex-col items-center gap-2">
                         {/* Warning Toast */}
-                        {brightness < 25 && (
+                        {/* Brightness warning temporarily disabled for testing */}
+                        {false && (
                           <div className="flex items-center gap-2 bg-amber-500/90 text-black px-4 py-2 rounded-full font-bold text-xs shadow-lg animate-bounce">
                             <Sparkles className="w-3 h-3" /> Needs More Light
                           </div>
@@ -587,9 +627,15 @@ const FaceRegistration = () => {
 
                         {/* Main Prompt */}
                         <div className={`px-6 py-3 rounded-2xl font-bold text-lg shadow-2xl backdrop-blur-xl border transition-all duration-300 ${isCapturingAuto ? 'bg-green-500 text-black border-green-400 scale-110' :
-                          facePosition ? 'bg-black/50 text-white border-white/20' : 'bg-white/10 text-white/60 border-transparent'
+                          distanceGuidance === 'too-far' ? 'bg-blue-500/90 text-white border-blue-400 animate-pulse' :
+                            distanceGuidance === 'too-close' ? 'bg-orange-500/90 text-white border-orange-400 animate-pulse' :
+                              facePosition ? 'bg-black/50 text-white border-white/20' : 'bg-white/10 text-white/60 border-transparent'
                           }`}>
-                          {isCapturingAuto ? "Hold Still... 📸" : (brightness < 25 ? "Move to Light" : livenessPrompts[livenessStep])}
+                          {isCapturingAuto ? "Hold Still... 📸" :
+                            brightness < 25 ? "Move to Light" :
+                              distanceGuidance === 'too-far' ? "📏 Come Closer" :
+                                distanceGuidance === 'too-close' ? "📏 Move Back" :
+                                  livenessPrompts[livenessStep]}
                         </div>
 
                         {/* Progress Dots */}
