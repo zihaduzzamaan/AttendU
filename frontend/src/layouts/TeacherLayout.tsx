@@ -113,7 +113,7 @@ const TeacherLayout = () => {
             </Sheet>
 
             {/* Main Content */}
-            <div className="flex-1 lg:ml-72 flex flex-col min-h-screen w-full relative z-10 transition-all duration-300">
+            <div className="flex-1 lg:ml-72 flex flex-col min-h-screen relative z-10 transition-all duration-300">
                 {/* Header */}
                 <header className="h-20 border-b border-slate-100 bg-white/80 backdrop-blur-md sticky top-0 z-20 px-4 sm:px-8 flex items-center justify-between">
                     <div className="flex items-center gap-3">
@@ -180,10 +180,12 @@ const TeacherLayout = () => {
                 </header>
 
                 {/* Page Content */}
-                <main className="flex-1 p-4 sm:p-6 md:p-8 overflow-x-hidden overflow-y-auto pb-24 lg:pb-8">
-                    <Outlet />
-                    <div className="mt-12 pt-8 border-t border-slate-100">
-                        <Footer />
+                <main className="flex-1 p-4 sm:p-6 md:p-8 overflow-y-auto pb-24 lg:pb-8">
+                    <div className="max-w-7xl mx-auto w-full space-y-8">
+                        <Outlet />
+                        <div className="mt-12 pt-8 border-t border-slate-100">
+                            <Footer />
+                        </div>
                     </div>
                 </main>
             </div>

@@ -296,23 +296,43 @@ export const api = {
   },
 
   logAttendance: async (logs: any[]) => {
-    const { error } = await supabase.from('attendance_logs').insert(logs);
-    if (error) throw error;
+    return await supabase.from('attendance_logs').insert(logs);
   },
 
   getAttendance: async (filters?: { student_id?: string; routine_id?: string; date?: string }) => {
     let query = supabase.from('attendance_logs').select('*').order('created_at', { ascending: false });
 
     if (filters?.student_id) query = query.eq('student_id', filters.student_id);
-    // Updated: Attendance logs now link to routines, which imply subjects.
-    // If we need to filter by 'subject', we have to filter by routines that have that subject.
-    // But logs usually just filter by routine_id (session) or date.
     if (filters?.routine_id) query = query.eq('routine_id', filters.routine_id);
-    // if (filters?.date) ... Date is inside created_at timestamp usually, handling that might be complex if not just 'eq'
 
     const { data, error } = await query;
     if (error) throw error;
     return data;
+  },
+
+  getSessionCount: async (courseCatalogId: string, sectionId: string) => {
+    const { data, error } = await supabase
+      .from('attendance_logs')
+      .select('date')
+      .eq('course_catalog_id', courseCatalogId)
+      .eq('section_id', sectionId);
+
+    if (error) throw error;
+    if (!data) return 0;
+    const uniqueDates = new Set(data.map(d => d.date));
+    return uniqueDates.size;
+  },
+
+  checkSessionExists: async (courseCatalogId: string, sectionId: string, date: string) => {
+    const { count, error } = await supabase
+      .from('attendance_logs')
+      .select('*', { count: 'exact', head: true })
+      .eq('course_catalog_id', courseCatalogId)
+      .eq('section_id', sectionId)
+      .eq('date', date);
+
+    if (error) throw error;
+    return (count || 0) > 0;
   },
 
   getAttendanceHistory: async (filters?: { teacher_id?: string; student_id?: string; section_id?: string }) => {
@@ -323,20 +343,12 @@ export const api = {
         student_id,
         profile:profiles(name)
       ),
-      routine:routines(
-        day_of_week,
-        start_time,
-        end_time,
-        course_catalog:course_catalog_id(subject_name, subject_code),
-        section:sections(name, batch:batches(name))
-      ),
       course_catalog:course_catalog_id(subject_name, subject_code),
       section:sections(name, batch:batches(name))
-    `).order('created_at', { ascending: false });
+    `).order('date', { ascending: false });
 
     if (filters?.teacher_id) {
-      // Filter by routine teacher OR manual teacher
-      query = query.or(`teacher_id.eq.${filters.teacher_id},routine.teacher_id.eq.${filters.teacher_id}`);
+      query = query.eq('teacher_id', filters.teacher_id);
     }
 
     if (filters?.student_id) {
@@ -344,8 +356,7 @@ export const api = {
     }
 
     if (filters?.section_id) {
-      // Filter by routine section OR manual section
-      query = query.or(`section_id.eq.${filters.section_id},routine.section_id.eq.${filters.section_id}`);
+      query = query.eq('section_id', filters.section_id);
     }
 
     const { data, error } = await query;

@@ -5,9 +5,10 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter }
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import { Camera, CheckCircle, AlertCircle, RefreshCw, UserCheck, XCircle, FileUp, Layers, Users, Scan, ChevronRight, ArrowLeft } from "lucide-react";
+import { Camera, CheckCircle, AlertCircle, RefreshCw, UserCheck, XCircle, FileUp, Layers, Users, Scan, ChevronRight, ArrowLeft, Calendar } from "lucide-react";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import * as faceapi from 'face-api.js';
@@ -20,6 +21,9 @@ const TakeAttendance = () => {
     const [step, setStep] = useState<'select' | 'camera' | 'verify' | 'success'>('select');
     const [assignments, setAssignments] = useState<any[]>([]);
     const [selectedAssignmentId, setSelectedAssignmentId] = useState("");
+    const [attendanceDate, setAttendanceDate] = useState(new Date().toISOString().split('T')[0]);
+    const [sessionCount, setSessionCount] = useState(0);
+    const [sessionForDateExists, setSessionForDateExists] = useState(false);
 
     const [attendanceData, setAttendanceData] = useState<{ studentId: string; status: 'present' | 'absent'; name: string; student_id: string; confidence?: number }[]>([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -83,6 +87,41 @@ const TakeAttendance = () => {
         };
         fetchAssignments();
     }, [authLoading, user?.teacher_id]);
+
+    useEffect(() => {
+        const checkSessionLimitAndDuplicates = async () => {
+            if (!selectedAssignmentId) {
+                setSessionCount(0);
+                setSessionForDateExists(false);
+                return;
+            }
+            const assignment = assignments.find(a => a.id === selectedAssignmentId);
+            if (!assignment) return;
+
+            try {
+                // 1. Check total session limit (25)
+                const count = await api.getSessionCount(assignment.course_catalog_id, assignment.section_id);
+                setSessionCount(count);
+                if (count >= 25) {
+                    toast.error(`Session limit reached (25/25) for this class.`);
+                }
+
+                // 2. Check if session already exists for SELECTED DATE
+                const dateExists = await api.checkSessionExists(
+                    assignment.course_catalog_id,
+                    assignment.section_id,
+                    attendanceDate
+                );
+                setSessionForDateExists(dateExists);
+                if (dateExists) {
+                    toast.warning(`Attendance already logged for this subject on ${attendanceDate}.`);
+                }
+            } catch (e) {
+                console.error("Error checking session data:", e);
+            }
+        };
+        checkSessionLimitAndDuplicates();
+    }, [selectedAssignmentId, assignments, attendanceDate]);
 
 
     // 📸 Camera Lifecycle Management
@@ -233,6 +272,7 @@ const TakeAttendance = () => {
     };
 
     const finalizeAttendance = () => {
+        if (!isTracking) return; // Guard against duplicate calls
         stopDetectionLoop();
         const recognized = recognizedStudentsRef.current;
         const students = allStudentsRef.current;
@@ -268,7 +308,7 @@ const TakeAttendance = () => {
         }, 20000);
 
         detectionInterval.current = setInterval(async () => {
-            if (!videoRef.current || !canvasRef.current) return;
+            if (!isTracking || !videoRef.current || !canvasRef.current) return;
             try {
                 const canvas = document.createElement('canvas');
                 canvas.width = videoRef.current.videoWidth;
@@ -366,15 +406,18 @@ const TakeAttendance = () => {
                 course_catalog_id: selectedAssignment.course_catalog_id,
                 section_id: selectedAssignment.section_id,
                 teacher_id: user.teacher_id,
-                date: new Date().toISOString().split('T')[0],
+                date: attendanceDate,
                 status: d.status,
                 confidence: d.status === 'present' ? 0.95 : 0
             }));
-            await api.logAttendance(logs);
+            const { error } = await api.logAttendance(logs);
+            if (error) throw error;
+
             setStep('success');
             toast.success("Attendance saved!");
-        } catch (e) {
-            toast.error("Network error");
+        } catch (e: any) {
+            console.error("❌ Submission Error:", e);
+            toast.error(e.message || "Failed to save attendance");
         } finally {
             setIsLoading(false);
         }
@@ -424,11 +467,36 @@ const TakeAttendance = () => {
                                     </div>
 
                                     {selectedAssignmentId && (
-                                        <div className="p-4 rounded-2xl bg-primary/5 border border-primary/10 flex items-start gap-3">
-                                            <Users className="w-5 h-5 text-primary mt-0.5" />
-                                            <div>
-                                                <p className="text-sm font-bold text-slate-800">Ready to Start</p>
-                                                <p className="text-xs text-slate-500 mt-0.5">Prepare the camera to scan students.</p>
+                                        <div className="space-y-4 animate-in slide-in-from-top-2 duration-300">
+                                            <div className="grid gap-2">
+                                                <Label className="uppercase text-[10px] font-bold tracking-widest text-slate-400">Session Date</Label>
+                                                <div className="relative">
+                                                    <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                                                    <Input
+                                                        type="date"
+                                                        value={attendanceDate}
+                                                        onChange={(e) => setAttendanceDate(e.target.value)}
+                                                        className="h-14 pl-11 rounded-xl border-slate-200 bg-white text-base"
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            <div className={`p-4 rounded-2xl border flex items-start gap-3 ${sessionCount >= 25 ? 'bg-red-50 border-red-100' : 'bg-primary/5 border-primary/10'}`}>
+                                                {sessionCount >= 25 ? (
+                                                    <AlertCircle className="w-5 h-5 text-red-500 mt-0.5" />
+                                                ) : (
+                                                    <Users className="w-5 h-5 text-primary mt-0.5" />
+                                                )}
+                                                <div>
+                                                    <p className={`text-sm font-bold ${sessionCount >= 25 ? 'text-red-800' : 'text-slate-800'}`}>
+                                                        {sessionCount >= 25 ? 'Limit Reached' : 'Session Status'}
+                                                    </p>
+                                                    <p className={`text-xs ${sessionCount >= 25 ? 'text-red-600' : 'text-slate-500'} mt-0.5`}>
+                                                        {sessionCount >= 25
+                                                            ? 'You have reached the maximum of 25 sessions for this class.'
+                                                            : `This will be session ${sessionCount + 1} of 25.`}
+                                                    </p>
+                                                </div>
                                             </div>
                                         </div>
                                     )}
@@ -448,11 +516,19 @@ const TakeAttendance = () => {
                             </div>
                         )}
                     </CardContent>
-                    <CardFooter className="p-6 pt-0">
+                    <CardFooter className="p-6 pt-0 flex flex-col gap-4">
+                        {sessionForDateExists && (
+                            <div className="w-full flex items-center gap-3 p-4 bg-amber-50 border border-amber-200 rounded-2xl animate-in slide-in-from-bottom-2">
+                                <AlertCircle className="w-5 h-5 text-amber-500 shrink-0" />
+                                <p className="text-sm font-semibold text-amber-800 text-left">
+                                    Attendance has already been recorded for this subject on the selected date.
+                                </p>
+                            </div>
+                        )}
                         <Button
-                            className="w-full h-14 text-lg font-bold rounded-xl shadow-lg shadow-primary/20"
+                            className={`w-full h-14 text-lg font-bold rounded-xl shadow-lg ${(sessionCount >= 25 || sessionForDateExists) ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'shadow-primary/20'}`}
                             onClick={handleStartCamera}
-                            disabled={!selectedAssignmentId || isLoading}
+                            disabled={!selectedAssignmentId || isLoading || sessionCount >= 25 || sessionForDateExists}
                         >
                             <Camera className="mr-2 w-5 h-5" /> Launch Scanner
                         </Button>
@@ -472,6 +548,9 @@ const TakeAttendance = () => {
                         <ArrowLeft className="w-4 h-4 mr-2" /> Back
                     </Button>
                     <div className="flex items-center gap-2">
+                        <Badge variant="outline" className="bg-slate-100 text-slate-600 border-none font-bold text-[10px]">
+                            📅 {new Date(attendanceDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                        </Badge>
                         <Badge variant="outline" className={`border-none ${isOnline ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'} font-bold uppercase tracking-wider text-[10px]`}>
                             {isOnline ? 'AI Connected' : 'AI Offline'}
                         </Badge>
@@ -612,7 +691,17 @@ const TakeAttendance = () => {
                 <div className="flex items-center justify-between">
                     <div>
                         <h1 className="text-3xl font-black text-slate-900">Summary</h1>
-                        <p className="text-slate-500">Review attendance before submitting.</p>
+                        <div className="flex items-center gap-2 mt-1">
+                            <span className="text-slate-500 text-sm">Attendance for</span>
+                            <div className="relative inline-block">
+                                <input
+                                    type="date"
+                                    value={attendanceDate}
+                                    onChange={(e) => setAttendanceDate(e.target.value)}
+                                    className="text-primary font-bold bg-transparent border-none p-0 focus:ring-0 cursor-pointer hover:underline"
+                                />
+                            </div>
+                        </div>
                     </div>
                     <div className="flex gap-3">
                         <div className="px-4 py-2 bg-green-50 rounded-xl border border-green-100">

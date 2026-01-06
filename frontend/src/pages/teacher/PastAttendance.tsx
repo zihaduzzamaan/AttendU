@@ -56,19 +56,24 @@ const PastAttendance = () => {
         fetchData();
     }, [user?.teacher_id]);
 
-    // Group records into sessions by (Subject + Date)
-    const sessions = useMemo(() => {
-        const grouped = new Map<string, SessionGroup>();
+    // Group records into sessions by (Date -> Subject)
+    const sessionsByDate = useMemo(() => {
+        const dateGroups = new Map<string, { date: string, subjects: Map<string, SessionGroup> }>();
 
         allRecords.forEach(record => {
+            const date = record.date;
             const subjId = record.course_catalog_id || record.routine?.course_catalog_id || "unknown";
             const subjName = record.course_catalog?.subject_name || record.routine?.course_catalog?.subject_name || "Unknown Subject";
-            const key = `${subjId}-${record.date}`;
 
-            if (!grouped.has(key)) {
-                grouped.set(key, {
-                    id: key,
-                    date: record.date,
+            if (!dateGroups.has(date)) {
+                dateGroups.set(date, { date, subjects: new Map() });
+            }
+
+            const dayGroup = dateGroups.get(date)!;
+            if (!dayGroup.subjects.has(subjId)) {
+                dayGroup.subjects.set(subjId, {
+                    id: `${subjId}-${date}`,
+                    date: date,
                     subjectId: subjId,
                     subjectName: subjName,
                     totalPresent: 0,
@@ -76,48 +81,48 @@ const PastAttendance = () => {
                     records: []
                 });
             }
-            const group = grouped.get(key)!;
-            group.records.push(record);
-            if (record.status === 'present') group.totalPresent++;
-            else group.totalAbsent++;
+
+            const subjectGroup = dayGroup.subjects.get(subjId)!;
+            subjectGroup.records.push(record);
+            if (record.status === 'present') subjectGroup.totalPresent++;
+            else subjectGroup.totalAbsent++;
         });
 
-        return Array.from(grouped.values()).sort((a, b) =>
-            new Date(b.date).getTime() - new Date(a.date).getTime()
-        );
+        // Convert to sorted array
+        return Array.from(dateGroups.values())
+            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+            .map(group => ({
+                ...group,
+                subjects: Array.from(group.subjects.values())
+            }));
     }, [allRecords]);
 
-    const filteredSessions = sessions.filter(session => {
-        const matchesSubject = selectedSubject === 'all' || session.subjectId === selectedSubject;
-        const matchesSearch = session.subjectName.toLowerCase().includes(searchTerm.toLowerCase());
-        return matchesSubject && matchesSearch;
-    });
+    const filteredGroups = useMemo(() => {
+        return sessionsByDate.map(group => {
+            const filteredSubjects = group.subjects.filter(subj => {
+                const matchesSubject = selectedSubject === 'all' || subj.subjectId === selectedSubject;
+                const matchesSearch = subj.subjectName.toLowerCase().includes(searchTerm.toLowerCase());
+                return matchesSubject && matchesSearch;
+            });
+            return { ...group, subjects: filteredSubjects };
+        }).filter(group => group.subjects.length > 0);
+    }, [sessionsByDate, selectedSubject, searchTerm]);
 
     const toggleStatus = async (recordId: string, currentStatus: string) => {
         const newStatus = currentStatus === 'present' ? 'absent' : 'present';
         try {
             await api.updateResource('attendance_logs', recordId, { status: newStatus });
-
-            // Optimistic update
             setAllRecords(prev => prev.map(r => r.id === recordId ? { ...r, status: newStatus } : r));
 
-            // Re-sync the selected session view
             if (selectedSession) {
                 const refreshedRecords = allRecords.map(r => r.id === recordId ? { ...r, status: newStatus } : r);
                 const updatedSessionRecords = refreshedRecords.filter(r => {
                     const rSubjId = r.course_catalog_id || r.routine?.course_catalog_id;
                     return rSubjId === selectedSession.subjectId && r.date === selectedSession.date;
                 });
-
                 let p = 0, a = 0;
                 updatedSessionRecords.forEach(r => r.status === 'present' ? p++ : a++);
-
-                setSelectedSession({
-                    ...selectedSession,
-                    records: updatedSessionRecords,
-                    totalPresent: p,
-                    totalAbsent: a
-                });
+                setSelectedSession({ ...selectedSession, records: updatedSessionRecords, totalPresent: p, totalAbsent: a });
             }
             toast.success("Attendance updated");
         } catch (e) {
@@ -126,108 +131,105 @@ const PastAttendance = () => {
     };
 
     return (
-        <div className="space-y-6">
-            <div>
-                <h1 className="text-3xl font-bold tracking-tight">Attendance History</h1>
-                <p className="text-muted-foreground mt-2">
-                    Review and update past class attendance records.
-                </p>
+        <div className="max-w-5xl mx-auto space-y-8 animate-in fade-in duration-500 pb-20">
+            <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
+                <div className="space-y-2">
+                    <h1 className="text-4xl font-black text-slate-900 tracking-tight">Attendance History</h1>
+                    <p className="text-slate-500 font-medium">Review and manage past classroom sessions.</p>
+                </div>
+
+                <div className="flex flex-wrap gap-3">
+                    <div className="relative min-w-[240px]">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                        <Input
+                            placeholder="Search subjects..."
+                            className="h-12 pl-10 rounded-xl border-slate-200 bg-white shadow-sm focus:ring-primary/20"
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                        />
+                    </div>
+                    <Select value={selectedSubject} onValueChange={setSelectedSubject}>
+                        <SelectTrigger className="h-12 w-[200px] rounded-xl border-slate-200 bg-white shadow-sm">
+                            <Filter className="w-4 h-4 mr-2 text-slate-400" />
+                            <SelectValue placeholder="All Subjects" />
+                        </SelectTrigger>
+                        <SelectContent className="rounded-xl border-slate-100 shadow-xl">
+                            <SelectItem value="all">All Subjects</SelectItem>
+                            {assignedClasses.map(ac => (
+                                <SelectItem key={ac.course_catalog_id} value={ac.course_catalog_id}>
+                                    {ac.course_catalog?.subject_name}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </div>
             </div>
 
-            <Card>
-                <CardHeader>
-                    <div className="flex flex-col md:flex-row gap-4 justify-between">
-                        <CardTitle className="flex items-center gap-2">
-                            <Calendar className="w-5 h-5" />
-                            Session History
-                        </CardTitle>
-                        <div className="flex gap-2">
-                            <div className="relative w-full md:w-64">
-                                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                                <Input
-                                    placeholder="Search subjects..."
-                                    className="pl-8"
-                                    value={searchTerm}
-                                    onChange={(e) => setSearchTerm(e.target.value)}
-                                />
-                            </div>
-                            <Select value={selectedSubject} onValueChange={setSelectedSubject}>
-                                <SelectTrigger className="w-[180px]">
-                                    <Filter className="w-4 h-4 mr-2" />
-                                    <SelectValue placeholder="All Subjects" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all">All Subjects</SelectItem>
-                                    {/* Show assigned classes */}
-                                    {assignedClasses.map(ac => (
-                                        <SelectItem key={ac.course_catalog_id} value={ac.course_catalog_id}>
-                                            {ac.course_catalog?.subject_name}
-                                        </SelectItem>
-                                    ))}
-                                    {/* Show unique subjects from history that aren't in assignments (e.g. manual sessions) */}
-                                    {sessions
-                                        .filter(s => !assignedClasses.some(ac => ac.subject_id === s.subjectId))
-                                        .map(s => (
-                                            <SelectItem key={s.subjectId} value={s.subjectId}>
-                                                {s.subjectName} (Manual)
-                                            </SelectItem>
-                                        ))
-                                    }
-                                </SelectContent>
-                            </Select>
-                        </div>
-                    </div>
-                </CardHeader>
-                <CardContent>
-                    {!isLoading ? (
-                        <Table>
-                            <TableHeader>
-                                <TableRow>
-                                    <TableHead>Date</TableHead>
-                                    <TableHead>Subject</TableHead>
-                                    <TableHead>Attendance</TableHead>
-                                    <TableHead className="text-right">Action</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {filteredSessions.length > 0 ? (
-                                    filteredSessions.map((session) => (
-                                        <TableRow key={session.id}>
-                                            <TableCell className="font-medium">
-                                                {new Date(session.date).toLocaleDateString()}
-                                            </TableCell>
-                                            <TableCell>{session.subjectName}</TableCell>
-                                            <TableCell>
-                                                <div className="flex gap-2 text-xs">
-                                                    <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-                                                        P: {session.totalPresent}
+            {!isLoading ? (
+                <div className="space-y-10">
+                    {filteredGroups.length > 0 ? (
+                        filteredGroups.map((group) => (
+                            <div key={group.date} className="space-y-4">
+                                <div className="flex items-center gap-4">
+                                    <h2 className="text-xl font-bold text-slate-800 bg-white px-4 py-2 rounded-2xl shadow-sm border border-slate-100">
+                                        📅 {new Date(group.date).toLocaleDateString(undefined, {
+                                            weekday: 'long',
+                                            year: 'numeric',
+                                            month: 'long',
+                                            day: 'numeric'
+                                        })}
+                                    </h2>
+                                    <div className="h-px flex-1 bg-slate-100" />
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                    {group.subjects.map((session) => (
+                                        <Card key={session.id} className="group hover:border-primary/30 transition-all duration-300 bg-white border-slate-100 shadow-sm hover:shadow-xl hover:shadow-primary/5 rounded-3xl overflow-hidden">
+                                            <CardHeader className="pb-2">
+                                                <div className="flex justify-between items-start mb-2">
+                                                    <Badge className="bg-primary/10 text-primary hover:bg-primary/20 border-none px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest">
+                                                        SESSION
                                                     </Badge>
-                                                    <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">
-                                                        A: {session.totalAbsent}
-                                                    </Badge>
+                                                    <div className="flex gap-2 text-[10px] font-bold">
+                                                        <span className="text-green-600 bg-green-50 px-2 py-0.5 rounded-md">P: {session.totalPresent}</span>
+                                                        <span className="text-red-600 bg-red-50 px-2 py-0.5 rounded-md">A: {session.totalAbsent}</span>
+                                                    </div>
                                                 </div>
-                                            </TableCell>
-                                            <TableCell className="text-right">
-                                                <Button variant="ghost" size="sm" onClick={() => setSelectedSession(session)}>
-                                                    View Details
+                                                <CardTitle className="text-lg font-black text-slate-800 line-clamp-1">
+                                                    {session.subjectName}
+                                                </CardTitle>
+                                            </CardHeader>
+                                            <CardContent className="pt-2">
+                                                <Button
+                                                    variant="secondary"
+                                                    className="w-full bg-slate-50 hover:bg-primary hover:text-white text-slate-600 font-bold rounded-xl transition-all"
+                                                    onClick={() => setSelectedSession(session)}
+                                                >
+                                                    View Detailed List
                                                 </Button>
-                                            </TableCell>
-                                        </TableRow>
-                                    ))
-                                ) : (
-                                    <TableRow>
-                                        <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
-                                            No sessions found.
-                                        </TableCell>
-                                    </TableRow>
-                                )}
-                            </TableBody>
-                        </Table>
+                                            </CardContent>
+                                        </Card>
+                                    ))}
+                                </div>
+                            </div>
+                        ))
                     ) : (
-                        <div className="text-center py-8 text-muted-foreground">Loading history...</div>
+                        <div className="flex flex-col items-center justify-center py-20 bg-slate-50 rounded-3xl border-2 border-dashed border-slate-200">
+                            <Calendar className="w-16 h-16 text-slate-300 mb-4" />
+                            <p className="text-slate-500 font-bold text-lg">No sessions match your search.</p>
+                            <Button variant="link" onClick={() => { setSearchTerm(""); setSelectedSubject("all"); }} className="text-primary mt-2">
+                                Clear all filters
+                            </Button>
+                        </div>
                     )}
-                </CardContent>
-            </Card>
+                </div>
+            ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {[1, 2, 3].map(i => (
+                        <div key={i} className="h-48 bg-slate-100 rounded-3xl animate-pulse" />
+                    ))}
+                </div>
+            )}
 
             <Dialog open={!!selectedSession} onOpenChange={(open) => !open && setSelectedSession(null)}>
                 <DialogContent className="max-w-3xl">

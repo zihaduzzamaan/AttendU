@@ -1,13 +1,16 @@
-
 import { Navigate, Outlet } from 'react-router-dom';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth, LoadingScreen } from '@/contexts/AuthContext';
 
 interface ProtectedRouteProps {
     allowedRole?: 'admin' | 'student' | 'teacher';
 }
 
 const ProtectedRoute = ({ allowedRole }: ProtectedRouteProps) => {
-    const { isAuthenticated, role, user } = useAuth();
+    const { isAuthenticated, role, user, loading } = useAuth();
+
+    if (loading) {
+        return <LoadingScreen />;
+    }
 
     if (!isAuthenticated) {
         return <Navigate to="/" replace />;
