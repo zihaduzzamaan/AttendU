@@ -511,9 +511,9 @@ const FaceRegistration = () => {
             <div className="absolute top-8 left-0 right-0 z-20 text-center px-4">
               {stage === 'capturing' && (
                 <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-black/60 backdrop-blur-md border border-white/10 shadow-lg">
-                  <div className={`w-2 h-2 rounded-full ${brightness < 40 ? 'bg-amber-500 animate-pulse' : 'bg-green-500'}`} />
+                  <div className={`w-2 h-2 rounded-full ${brightness < 25 ? 'bg-amber-500 animate-pulse' : 'bg-green-500'}`} />
                   <span className="text-xs font-bold tracking-wide uppercase text-white/90">
-                    {brightness < 40 ? 'Low Light' : 'Camera Active'}
+                    {brightness < 25 ? 'Low Light' : 'Camera Active'}
                   </span>
                 </div>
               )}
@@ -579,7 +579,7 @@ const FaceRegistration = () => {
                     {stage === 'capturing' && (
                       <div className="absolute bottom-4 left-0 right-0 flex flex-col items-center gap-2">
                         {/* Warning Toast */}
-                        {brightness < 40 && (
+                        {brightness < 25 && (
                           <div className="flex items-center gap-2 bg-amber-500/90 text-black px-4 py-2 rounded-full font-bold text-xs shadow-lg animate-bounce">
                             <Sparkles className="w-3 h-3" /> Needs More Light
                           </div>
@@ -589,7 +589,7 @@ const FaceRegistration = () => {
                         <div className={`px-6 py-3 rounded-2xl font-bold text-lg shadow-2xl backdrop-blur-xl border transition-all duration-300 ${isCapturingAuto ? 'bg-green-500 text-black border-green-400 scale-110' :
                           facePosition ? 'bg-black/50 text-white border-white/20' : 'bg-white/10 text-white/60 border-transparent'
                           }`}>
-                          {isCapturingAuto ? "Hold Still... 📸" : (brightness < 40 ? "Move to Light" : livenessPrompts[livenessStep])}
+                          {isCapturingAuto ? "Hold Still... 📸" : (brightness < 25 ? "Move to Light" : livenessPrompts[livenessStep])}
                         </div>
 
                         {/* Progress Dots */}
