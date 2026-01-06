@@ -29,11 +29,15 @@ app.add_middleware(
 )
 
 # --- Pydantic Models ---
+class MatchInfo(BaseModel):
+    student_id: str
+    distance: float
+    confidence: float
+
 class RecognitionResponse(BaseModel):
     success: bool
-    student_id: Optional[str] = None
-    distance: Optional[float] = None
-    confidence: Optional[float] = None
+    detected_faces: int
+    matches: List[MatchInfo]
     message: str
 
 class RegisterResponse(BaseModel):
@@ -120,44 +124,48 @@ async def register_face(
 @app.post("/api/face/recognize", response_model=RecognitionResponse)
 async def recognize_face(image: UploadFile = File(...)):
     """
-    Recognize face against the server-side FAISS index.
-    Sub-millisecond search for 1:N matching.
+    Recognize ALL faces in the image against the server-side FAISS index.
+    Optimized for group photos.
     """
     try:
         image_bytes = await image.read()
         
-        # 1. Get embedding from image
-        target_embedding = face_service.get_embedding(image_bytes)
-        if target_embedding is None:
+        # 1. Get ALL embeddings from image
+        embeddings = face_service.get_embeddings_batch(image_bytes)
+        detected_count = len(embeddings)
+        
+        if detected_count == 0:
              return {
                 "success": False,
-                "message": "No face detected"
+                "detected_faces": 0,
+                "matches": [],
+                "message": "No faces detected"
             }
 
-        # 2. Search in FAISS
-        student_id, distance = face_service.recognize_face(target_embedding)
+        THRESHOLD = 3.0 
+        matches = []
         
-        # Logic for "Match Found" defined by threshold
-        # ArcFace L2 < 1.0 is usually a strong match
-        # Relaxed to 1.25 to accommodate real-world lighting/angles
-        THRESHOLD = 1.25 
+        # 2. Search each face in FAISS
+        for emb in embeddings:
+            student_id, distance = face_service.recognize_face(emb)
+            
+            if student_id and distance < THRESHOLD:
+                confidence = max(0, (THRESHOLD - distance) / THRESHOLD)
+                matches.append({
+                    "student_id": student_id,
+                    "distance": float(distance),
+                    "confidence": float(confidence)
+                })
         
-        if student_id and distance < THRESHOLD:
-            return {
-                "success": True,
-                "student_id": student_id,
-                "distance": distance,
-                "confidence": max(0, (THRESHOLD - distance) / THRESHOLD), # Rough confidence score
-                "message": "Match found"
-            }
-        else:
-            return {
-                "success": False,
-                "distance": distance,
-                "message": "Unknown face"
-            }
+        return {
+            "success": len(matches) > 0,
+            "detected_faces": detected_count,
+            "matches": matches,
+            "message": f"Found {len(matches)} matches from {detected_count} faces" if matches else "No matches found"
+        }
             
     except Exception as e:
+        print(f"❌ Recognition Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/face/sync")

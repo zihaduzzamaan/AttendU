@@ -478,33 +478,12 @@ export const api = {
       }
 
       const result = await response.json();
-      console.log('✅ Recognition API response:', result);
+      console.log('✅ Recognition API response (Multi-Face):', result);
 
-      // ADAPTER: Transform new backend response (single face) to old frontend format (list of matches)
-      // Backend returns: { success: true, student_id: "...", distance: 0.45, confidence: 0.88, message: "..." }
-      if (result.success && result.student_id) {
-        return {
-          detected_faces: 1,
-          matches: [{
-            student_id: result.student_id,
-            confidence: result.confidence || 0.95 // Fallback confidence
-          }]
-        };
-      } else if (result.message === "Unknown face" || result.distance !== undefined) {
-        // Face detected but not matched
-        console.warn(`📉 Match Failed: Distance ${result.distance?.toFixed(4)} (Threshold was strict)`);
-
-        return {
-          detected_faces: 1,
-          matches: []
-        };
-      } else {
-        // No face detected at all
-        return {
-          detected_faces: 0,
-          matches: []
-        };
-      }
+      return {
+        detected_faces: result.detected_faces || 0,
+        matches: result.matches || []
+      };
 
     } catch (error) {
       console.error('Error calling Python backend:', error);
