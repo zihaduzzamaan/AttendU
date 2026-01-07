@@ -66,9 +66,6 @@ export const LoadingScreen = () => {
               {messages[messageIndex]}
             </p>
           </div>
-          <p className="mt-2 text-muted-foreground text-sm max-w-[250px] leading-relaxed">
-            Revolutionizing academic tracking with advanced AI.
-          </p>
         </div>
 
         <div className="mt-4 flex items-center gap-3 rounded-full bg-muted/50 px-4 py-2 border border-border/50 backdrop-blur-sm">

@@ -113,7 +113,7 @@ const StudentLayout = () => {
             {/* Main Content Area */}
             <main className="flex-1 lg:ml-72 w-full pb-24 lg:pb-0">
                 {/* Modern Header */}
-                <header className="sticky top-0 z-30 flex h-20 items-center justify-between bg-white/80 backdrop-blur-md border-b border-slate-100 px-6 sm:px-10">
+                <header className="sticky top-0 z-30 flex h-20 items-center justify-between bg-white/80 backdrop-blur-md border-b border-slate-100 px-4 sm:px-10">
                     <div className="lg:hidden flex items-center gap-3">
                         <div className="w-9 h-9 rounded-lg bg-primary flex items-center justify-center shadow-lg shadow-primary/20">
                             <GraduationCap className="w-5 h-5 text-white" />
@@ -168,17 +168,17 @@ const StudentLayout = () => {
                 </header>
 
                 {/* Content */}
-                <div className="p-6 sm:p-10 max-w-6xl mx-auto min-h-[calc(100vh-80px-100px)]">
+                <div className="px-3 sm:px-10 py-6 max-w-6xl mx-auto min-h-[calc(100vh-80px-100px)]">
                     <Outlet />
                 </div>
 
-                <div className="px-6 sm:px-10 pb-10">
+                <div className="px-4 sm:px-10 pb-10">
                     <Footer />
                 </div>
             </main>
 
             {/* Mobile Bottom Navigation */}
-            <nav className="lg:hidden fixed bottom-6 left-6 right-6 z-50 h-16 bg-slate-900 rounded-2xl shadow-2xl flex items-center justify-around px-4 border border-white/10 backdrop-blur-lg">
+            <nav className="lg:hidden fixed bottom-4 left-4 right-4 z-50 h-16 bg-slate-900 rounded-2xl shadow-2xl flex items-center justify-around px-4 border border-white/10 backdrop-blur-lg">
                 <NavLink
                     to="/student/attendance"
                     className={({ isActive }) =>

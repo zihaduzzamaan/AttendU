@@ -335,7 +335,14 @@ export const api = {
     return (count || 0) > 0;
   },
 
-  getAttendanceHistory: async (filters?: { teacher_id?: string; student_id?: string; section_id?: string }) => {
+  getAttendanceHistory: async (filters?: {
+    teacher_id?: string;
+    student_id?: string;
+    section_id?: string;
+    date?: string;
+    faculty_id?: string;
+    batch_id?: string;
+  }) => {
     let query = supabase.from('attendance_logs').select(`
       *,
       student:students(
@@ -344,7 +351,16 @@ export const api = {
         profile:profiles(name)
       ),
       course_catalog:course_catalog_id(subject_name, subject_code),
-      section:sections(name, batch:batches(name))
+      section:sections!inner(
+        id,
+        name, 
+        batch:batches!inner(
+          id,
+          name,
+          current_semester,
+          faculty:faculties!inner(id, name)
+        )
+      )
     `).order('date', { ascending: false });
 
     if (filters?.teacher_id) {
@@ -357,6 +373,18 @@ export const api = {
 
     if (filters?.section_id) {
       query = query.eq('section_id', filters.section_id);
+    }
+
+    if (filters?.date) {
+      query = query.eq('date', filters.date);
+    }
+
+    if (filters?.batch_id) {
+      query = query.eq('section.batch_id', filters.batch_id);
+    }
+
+    if (filters?.faculty_id) {
+      query = query.eq('section.batch.faculty_id', filters.faculty_id);
     }
 
     const { data, error } = await query;
