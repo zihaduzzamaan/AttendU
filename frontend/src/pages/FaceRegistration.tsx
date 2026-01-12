@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Camera, CheckCircle, RefreshCw, AlertCircle, XCircle, Scan, Fingerprint, Sparkles, ShieldCheck, ChevronRight } from 'lucide-react';
+import { Camera, CheckCircle, RefreshCw, AlertCircle, XCircle, Scan, Fingerprint, Sparkles, ShieldCheck, ChevronRight, ScanFace } from 'lucide-react';
 import * as faceapi from 'face-api.js';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -13,7 +13,7 @@ const CAPTURE_INTERVAL = 1000;
 
 const FaceRegistration = () => {
   const navigate = useNavigate();
-  const { user, role, completeFaceRegistration } = useAuth();
+  const { user, role, completeFaceRegistration, logout } = useAuth();
   const [searchParams] = useSearchParams();
   const isUpdateMode = searchParams.get('mode') === 'update';
   const [stage, setStage] = useState<'loading' | 'intro' | 'capturing' | 'processing' | 'success' | 'error' | 'insecure'>('intro');
@@ -513,43 +513,53 @@ const FaceRegistration = () => {
         <div className="absolute top-[40%] left-[30%] w-[30%] h-[30%] bg-indigo-900/20 rounded-full blur-[100px] animate-pulse delay-2000" />
       </div>
 
-      <div className="w-full max-w-4xl z-10 grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
+      <div className="w-full max-w-4xl z-10 grid grid-cols-1 lg:grid-cols-2 lg:gap-8 items-center">
 
         {/* LEFT COLUMN: GUIDANCE & INFO */}
         <div className="space-y-8 order-2 lg:order-1 animate-slide-in-left">
           <div className="space-y-2">
-            <div className="flex items-center gap-2 mb-4">
-              <div className="p-2 bg-gradient-to-tr from-cyan-500 to-blue-600 rounded-xl shadow-lg shadow-cyan-500/20">
-                <Fingerprint className="w-6 h-6 text-white" />
-              </div>
-              <span className="text-sm font-bold tracking-widest uppercase text-cyan-400">Secure Identity</span>
-            </div>
-            <h1 className="text-4xl lg:text-5xl font-black tracking-tighter bg-gradient-to-br from-white via-gray-200 to-gray-500 bg-clip-text text-transparent">
-              Face ID Registration
+            <h1 className="text-4xl lg:text-5xl font-black tracking-tighter bg-gradient-to-br from-white via-gray-200 to-gray-500 bg-clip-text text-transparent flex items-center gap-4">
+              <ScanFace className="w-12 h-12 text-cyan-400" />
+              Face Registration
             </h1>
             <p className="text-lg text-gray-400 font-medium leading-relaxed max-w-md">
-              Secure your account using advanced biometric verification. It takes less than 30 seconds.
+              Register your face data so teachers can mark your attendance automatically using their device.
             </p>
           </div>
 
-          {/* Steps */}
-          <div className="space-y-4">
-            {[
-              { icon: Camera, title: "Positioning", desc: "Center your face in the frame", active: stage === 'capturing' },
-              { icon: Scan, title: "Liveness Check", desc: "Follow the movement prompts", active: stage === 'capturing' && livenessStep !== 'align' },
-              { icon: ShieldCheck, title: "Secure Store", desc: "Encryption & mathematical hashing", active: stage === 'success' }
-            ].map((item, idx) => (
-              <div key={idx} className={`flex items-center gap-4 p-4 rounded-2xl border transition-all duration-300 ${item.active ? 'bg-white/5 border-white/20 shadow-xl scale-105' : 'bg-transparent border-transparent opacity-50'}`}>
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${item.active ? 'bg-cyan-500 text-black' : 'bg-white/10 text-white'}`}>
-                  <item.icon className="w-5 h-5" />
+          {/* Horizontal Progress Stepper */}
+          <div className="relative w-full px-2 py-4">
+            {/* Connecting Line */}
+            <div className="absolute top-1/2 left-6 right-6 h-0.5 bg-white/10 -translate-y-full -z-10">
+              <div
+                className="h-full bg-gradient-to-r from-cyan-500 to-blue-500 transition-all duration-700 ease-out"
+                style={{
+                  width: stage === 'success' ? '100%' :
+                    (stage === 'capturing' && livenessStep !== 'align') ? '50%' : '0%'
+                }}
+              />
+            </div>
+
+            <div className="flex justify-between items-start relative z-10">
+              {[
+                { icon: Camera, title: "Positioning", active: true, completed: livenessStep !== 'align' || stage === 'success' },
+                { icon: Scan, title: "Scanning", active: livenessStep !== 'align' || stage === 'success', completed: stage === 'success' },
+                { icon: ShieldCheck, title: "Saved", active: stage === 'success', completed: stage === 'success' }
+              ].map((item, idx) => (
+                <div key={idx} className="flex flex-col items-center gap-2 group cursor-default">
+                  <div className={`w-12 h-12 rounded-full flex items-center justify-center border-2 transition-all duration-500 ${item.active
+                    ? 'bg-black border-cyan-500 shadow-[0_0_20px_rgba(34,211,238,0.4)] scale-110 text-cyan-400'
+                    : 'bg-black border-white/10 text-gray-500'
+                    } ${item.completed ? 'bg-cyan-500 border-cyan-500 text-black' : ''}`}>
+                    <item.icon className="w-5 h-5" />
+                  </div>
+                  <span className={`text-xs font-bold tracking-wider uppercase transition-colors duration-300 ${item.active ? 'text-cyan-400' : 'text-gray-600'
+                    }`}>
+                    {item.title}
+                  </span>
                 </div>
-                <div>
-                  <h3 className={`font-bold ${item.active ? 'text-white' : 'text-gray-400'}`}>{item.title}</h3>
-                  <p className="text-xs text-gray-500">{item.desc}</p>
-                </div>
-                {item.active && <ChevronRight className="ml-auto w-5 h-5 text-cyan-500 animate-pulse" />}
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         </div>
 
@@ -715,13 +725,23 @@ const FaceRegistration = () => {
               <div className="absolute bottom-8 left-8 right-8 z-40 animate-slide-up">
                 <Button onClick={handleScanAndSave} className="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-400 hover:to-emerald-500 text-white h-16 rounded-2xl text-xl font-bold border-0 shadow-[0_10px_40px_rgba(34,197,94,0.4)] transition-all transform hover:scale-[1.02] active:scale-[0.98]" disabled={isUploading}>
                   {isUploading ? <RefreshCw className="w-6 h-6 animate-spin mr-2" /> : <ShieldCheck className="w-6 h-6 mr-2" />}
-                  Finish & Secure
+                  Save Face Data
                 </Button>
               </div>
             )}
 
           </div>
         </div>
+      </div>
+
+      {/* Sign Out Button */}
+      <div className="absolute bottom-4 left-0 right-0 flex justify-center z-50">
+        <button
+          onClick={logout}
+          className="bg-black border border-zinc-800 text-red-500 text-xs font-medium px-4 py-1.5 rounded-full hover:bg-zinc-900 transition-colors"
+        >
+          Sign Out
+        </button>
       </div>
 
       {/* CSS Animation Injection for Scan Line */}

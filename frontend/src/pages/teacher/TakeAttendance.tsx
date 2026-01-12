@@ -275,7 +275,10 @@ const TakeAttendance = () => {
     };
 
     const finalizeAttendance = () => {
-        if (!isTracking) return; // Guard against duplicate calls
+        if (autoStopTimer.current) {
+            clearTimeout(autoStopTimer.current);
+            autoStopTimer.current = null;
+        }
         stopDetectionLoop();
         const recognized = recognizedStudentsRef.current;
         const students = allStudentsRef.current;

@@ -89,46 +89,77 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<any>(null);
   const [role, setRole] = useState<UserRole | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [selectedRole, setSelectedRole] = useState<UserRole | null>(null);
+  const [selectedRole, setSelectedRoleState] = useState<UserRole | null>(() => {
+    return localStorage.getItem('selectedRole') as UserRole | null;
+  });
+
+  const setSelectedRole = (role: UserRole | null) => {
+    setSelectedRoleState(role);
+    if (role) {
+      localStorage.setItem('selectedRole', role);
+    } else {
+      localStorage.removeItem('selectedRole');
+    }
+  };
   const [pendingStudentId, setPendingStudentId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const syncLock = React.useRef(false);
 
   const syncProfile = async (sessionUser: any, retryCount = 0): Promise<boolean> => {
+    if (syncLock.current) return true;
+    syncLock.current = true;
+
     try {
+      // console.log("🔄 Syncing profile for:", sessionUser.email);
       const { data: profile, error } = (await withTimeout(
-        supabase.from('profiles').select('*').eq('id', sessionUser.id).maybeSingle(),
-        4000,
+        supabase
+          .from('profiles')
+          .select('*, students(id, face_registered), teachers(id)')
+          .eq('id', sessionUser.id)
+          .maybeSingle(),
+        5000,
         "Profile fetch delayed"
       )) as any;
 
       if (error || !profile) {
         if (retryCount < 2) {
-          await new Promise(resolve => setTimeout(resolve, 1500));
+          syncLock.current = false;
+          await new Promise(resolve => setTimeout(resolve, 200));
           return await syncProfile(sessionUser, retryCount + 1);
         }
         return false;
       }
 
-      let extraData = {};
-      try {
-        if (profile.role === 'teacher') {
-          const teacher = await withTimeout(api.getTeacherByProfileId(profile.id), 3000, "Teacher sync timeout");
-          if (teacher) extraData = { teacher_id: teacher.id };
-        } else if (profile.role === 'student') {
-          const student = await withTimeout(api.getStudentByProfileId(profile.id), 3000, "Student sync timeout");
-          if (student) extraData = { student_id: student.id, face_registered: student.face_registered };
-        }
-      } catch (metaErr) {
-        console.warn('⚠️ Metadata fetch failed:', metaErr);
+      const role = profile.role as UserRole;
+      let extraData: any = {};
+
+      if (role === 'student' && profile.students?.[0]) {
+        extraData = {
+          student_id: profile.students[0].id,
+          face_registered: profile.students[0].face_registered
+        };
+      } else if (role === 'teacher' && profile.teachers?.[0]) {
+        extraData = {
+          teacher_id: profile.teachers[0].id
+        };
       }
 
-      setUser({ ...sessionUser, ...profile, ...extraData });
-      setRole(profile.role as UserRole);
+      setUser({
+        ...sessionUser,
+        ...profile,
+        ...extraData,
+        // Cleanup nested arrays for cleaner user object
+        students: undefined,
+        teachers: undefined
+      });
+      setRole(role);
       setIsAuthenticated(true);
       return true;
     } catch (err) {
-      console.warn("⚠️ Profile sync failed:", err);
+      // console.warn("⚠️ Profile sync failed:", err);
       return false;
+    } finally {
+      syncLock.current = false;
     }
   };
 
@@ -215,17 +246,54 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signup = async (data: any) => {
     try {
+      const email = data.email.trim();
+      const password = data.password;
+      // console.log("🚀 Attempting Signup:", { email, role: data.role, name: data.name });
+
       const { data: authData, error: authError } = await withTimeout(
         supabase.auth.signUp({
-          email: data.email,
-          password: data.password,
-          options: { data: { name: data.name, role: data.role } }
+          email: email,
+          password: password,
+          options: {
+            data: {
+              name: data.name,
+              role: data.role
+            }
+          }
         }),
         15000,
         "Signup timeout"
       );
 
-      if (authError) return { success: false, error: authError.message };
+      if (authError) {
+        // console.error("❌ Supabase Auth Signup Error:", authError);
+        // Recovery logic for broken accounts (Auth exists but Profile doesn't)
+        if (authError.message.includes("already registered")) {
+          const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+
+          if (!signInError && signInData.user) {
+            const { data: profile } = await supabase.from('profiles').select('id').eq('id', signInData.user.id).maybeSingle();
+
+            if (!profile) {
+              // console.log("🛠️ Repairing broken account (missing profile)...");
+              const repairUserId = signInData.user.id;
+              const { error: pErr } = await supabase.from('profiles').insert([{ id: repairUserId, email, name: data.name, role: data.role }]);
+              if (pErr) return { success: false, error: "Repair failed (profile): " + pErr.message };
+
+              if (data.role === 'student') {
+                await supabase.from('students').insert([{ profile_id: repairUserId, student_id: data.studentId, section_id: data.section_id, is_active: true }]);
+              } else if (data.role === 'teacher') {
+                await supabase.from('teachers').insert([{ profile_id: repairUserId, faculty_id: data.facultyId, is_active: true }]);
+              }
+
+              await syncProfile(signInData.user);
+              return { success: true, userId: repairUserId };
+            }
+          }
+          return { success: false, error: "This email is already registered. Please login instead." };
+        }
+        return { success: false, error: authError.message };
+      }
       if (!authData.user) return { success: false, error: 'Signup failed' };
 
       const userId = authData.user.id;

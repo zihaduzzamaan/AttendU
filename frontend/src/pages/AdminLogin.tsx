@@ -110,15 +110,7 @@ const AdminLogin = () => {
               </Button>
             </form>
 
-            <div className="mt-8 p-4 bg-muted/50 rounded-xl border border-border/50">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 mb-2 text-center">
-                Demo access
-              </p>
-              <div className="text-xs text-muted-foreground space-y-1 font-medium">
-                <p className="flex justify-between"><span>Email:</span> <span className="text-foreground">admin@university.edu</span></p>
-                <p className="flex justify-between"><span>Pass:</span> <span className="text-foreground">admin123</span></p>
-              </div>
-            </div>
+
           </CardContent>
         </Card>
       </div>
