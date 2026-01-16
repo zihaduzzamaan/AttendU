@@ -89,7 +89,7 @@ const StudentAttendance = () => {
     }
 
     return (
-        <div className="max-w-7xl mx-auto space-y-6 pb-20 pt-4 animate-in fade-in duration-700">
+        <div className="max-w-7xl mx-auto space-y-6 pb-20 animate-in fade-in duration-700">
             {/* Minimal Header */}
             <div className="flex flex-col items-center text-center gap-3 px-2">
                 <div>

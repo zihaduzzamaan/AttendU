@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import { UserRole, AuthState } from '@/types';
 import { supabase } from '@/lib/supabase';
 import { api } from '@/services/api';
-import { GraduationCap } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface AuthContextType extends AuthState {
   loading: boolean;
@@ -41,43 +41,96 @@ export const LoadingScreen = () => {
       setMessageIndex((prev) => (prev + 1) % messages.length);
     }, 2500);
     return () => clearInterval(interval);
-  }, []);
+  }, [messages.length]);
 
   return (
-    <div className="relative flex h-screen w-full flex-col items-center justify-center overflow-hidden bg-background">
-      <div className="absolute top-1/4 -left-20 h-72 w-72 animate-blob rounded-full bg-primary/10 blur-3xl filter opacity-70"></div>
-      <div className="absolute top-1/3 -right-20 h-72 w-72 animate-blob animation-delay-2000 rounded-full bg-secondary/10 blur-3xl filter opacity-70"></div>
-      <div className="absolute -bottom-20 left-1/2 h-72 w-72 animate-blob animation-delay-4000 rounded-full bg-primary/5 blur-3xl filter opacity-70"></div>
+    <div className="relative flex h-screen w-full flex-col items-center justify-center overflow-hidden bg-black text-white">
+      {/* Dynamic Background */}
+      <div className="absolute inset-0 z-0">
+        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-indigo-500/10 rounded-full blur-[120px] animate-pulse" />
+        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-blue-500/10 rounded-full blur-[120px] animate-pulse delay-700" />
+      </div>
 
-      <div className="relative z-10 flex flex-col items-center gap-8">
-        <div className="relative">
-          <div className="absolute inset-0 animate-ping rounded-full bg-primary/20"></div>
-          <div className="relative flex h-24 w-24 items-center justify-center rounded-3xl bg-primary shadow-2xl shadow-primary/40 transform transition-transform hover:scale-105 active:scale-95 duration-500">
-            <GraduationCap className="h-12 w-12 text-white" />
+      <div className="relative z-10 flex flex-col items-center gap-12">
+        {/* Modern Loading Animation */}
+        <div className="relative h-24 w-24 flex items-center justify-center">
+          <motion.div
+            initial={{ scale: 0.8, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="absolute inset-0 rounded-full border border-indigo-500/30"
+          />
+          <motion.div
+            animate={{
+              scale: [1, 1.2, 1],
+              opacity: [0.3, 0.6, 0.3],
+            }}
+            transition={{
+              duration: 2,
+              repeat: Infinity,
+              ease: "easeInOut"
+            }}
+            className="absolute inset-0 rounded-full bg-indigo-500/20 blur-xl"
+          />
+          <div className="relative flex items-center gap-1">
+            {[0, 1, 2].map((i) => (
+              <motion.div
+                key={i}
+                animate={{
+                  height: [8, 24, 8],
+                  opacity: [0.5, 1, 0.5],
+                }}
+                transition={{
+                  duration: 1,
+                  repeat: Infinity,
+                  delay: i * 0.2,
+                  ease: "easeInOut"
+                }}
+                className="w-1.5 bg-indigo-500 rounded-full"
+              />
+            ))}
           </div>
         </div>
 
-        <div className="flex flex-col items-center gap-2 text-center px-6">
-          <h1 className="text-3xl font-bold tracking-tight bg-gradient-to-br from-foreground to-foreground/60 bg-clip-text text-transparent">
+        <div className="flex flex-col items-center gap-4 text-center px-6">
+          <motion.h1
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="text-4xl font-black tracking-tighter bg-gradient-to-b from-white to-gray-500 bg-clip-text text-transparent"
+          >
             AttendU
-          </h1>
-          <div className="h-6 flex items-center justify-center">
-            <p className="animate-slide-up text-primary font-medium tracking-wide">
-              {messages[messageIndex]}
-            </p>
+          </motion.h1>
+
+          <div className="h-8 flex items-center justify-center overflow-hidden">
+            <AnimatePresence mode="wait">
+              <motion.p
+                key={messageIndex}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.5 }}
+                className="text-indigo-400 font-bold text-sm tracking-wide uppercase"
+              >
+                {messages[messageIndex]}
+              </motion.p>
+            </AnimatePresence>
           </div>
         </div>
 
-        <div className="mt-4 flex items-center gap-3 rounded-full bg-muted/50 px-4 py-2 border border-border/50 backdrop-blur-sm">
-          <div className="h-3 w-3 animate-spin rounded-full border-2 border-primary border-t-transparent"></div>
-          <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/80">
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.5 }}
+          className="mt-4 flex items-center gap-3 rounded-full bg-white/5 px-6 py-2.5 border border-white/10 backdrop-blur-md"
+        >
+          <div className="h-2 w-2 rounded-full bg-indigo-500 animate-pulse shadow-[0_0_10px_rgba(99,102,241,0.8)]"></div>
+          <span className="text-[10px] font-black uppercase tracking-[0.3em] text-gray-400">
             Initializing System
           </span>
-        </div>
+        </motion.div>
       </div>
 
       <div className="absolute bottom-10 left-0 w-full text-center">
-        <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground/40 font-bold">
+        <p className="text-[10px] uppercase tracking-[0.4em] text-white/20 font-black">
           Developed by Zihad (The Dev)
         </p>
       </div>
@@ -110,7 +163,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     syncLock.current = true;
 
     try {
-      // console.log("🔄 Syncing profile for:", sessionUser.email);
       const { data: profile, error } = (await withTimeout(
         supabase
           .from('profiles')
@@ -148,7 +200,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         ...sessionUser,
         ...profile,
         ...extraData,
-        // Cleanup nested arrays for cleaner user object
         students: undefined,
         teachers: undefined
       });
@@ -156,7 +207,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setIsAuthenticated(true);
       return true;
     } catch (err) {
-      // console.warn("⚠️ Profile sync failed:", err);
       return false;
     } finally {
       syncLock.current = false;
@@ -248,7 +298,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const email = data.email.trim();
       const password = data.password;
-      // console.log("🚀 Attempting Signup:", { email, role: data.role, name: data.name });
 
       const { data: authData, error: authError } = await withTimeout(
         supabase.auth.signUp({
@@ -266,8 +315,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       );
 
       if (authError) {
-        // console.error("❌ Supabase Auth Signup Error:", authError);
-        // Recovery logic for broken accounts (Auth exists but Profile doesn't)
         if (authError.message.includes("already registered")) {
           const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({ email, password });
 
@@ -275,7 +322,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             const { data: profile } = await supabase.from('profiles').select('id').eq('id', signInData.user.id).maybeSingle();
 
             if (!profile) {
-              // console.log("🛠️ Repairing broken account (missing profile)...");
               const repairUserId = signInData.user.id;
               const { error: pErr } = await supabase.from('profiles').insert([{ id: repairUserId, email, name: data.name, role: data.role }]);
               if (pErr) return { success: false, error: "Repair failed (profile): " + pErr.message };
