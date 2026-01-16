@@ -88,7 +88,7 @@ const AdminLogin = () => {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
-                  className="h-11"
+                  className="h-11 border-white/10 bg-white/5 text-white placeholder:text-gray-500 focus:border-indigo-500/50 focus:ring-indigo-500/50"
                 />
               </div>
               <div className="space-y-2">

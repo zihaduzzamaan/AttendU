@@ -263,19 +263,34 @@ const AuthPage = () => {
                 <TabsContent value="login">
                   <form onSubmit={handleLogin} className="space-y-4">
                     <div className="space-y-2">
-                      <Label htmlFor="email">Email</Label>
-                      <Input id="email" type="email" placeholder="m@example.com" value={loginEmail} onChange={e => setLoginEmail(e.target.value)} required className="h-11" />
+                      <Label htmlFor="email" className="text-gray-300">Email</Label>
+                      <Input
+                        id="email"
+                        type="email"
+                        placeholder="m@example.com"
+                        value={loginEmail}
+                        onChange={e => setLoginEmail(e.target.value)}
+                        required
+                        className="h-11 border-white/10 bg-white/5 text-white placeholder:text-gray-500 focus:border-indigo-500/50 focus:ring-indigo-500/50"
+                      />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="password">Password</Label>
+                      <Label htmlFor="password" className="text-gray-300">Password</Label>
                       <div className="relative">
-                        <Input id="password" type={showPassword ? "text" : "password"} value={loginPassword} onChange={e => setLoginPassword(e.target.value)} required className="h-11" />
-                        <Button type="button" variant="ghost" size="icon" className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent" onClick={() => setShowPassword(!showPassword)}>
+                        <Input
+                          id="password"
+                          type={showPassword ? "text" : "password"}
+                          value={loginPassword}
+                          onChange={e => setLoginPassword(e.target.value)}
+                          required
+                          className="h-11 border-white/10 bg-white/5 text-white placeholder:text-gray-500 focus:border-indigo-500/50 focus:ring-indigo-500/50"
+                        />
+                        <Button type="button" variant="ghost" size="icon" className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent text-gray-400 hover:text-white" onClick={() => setShowPassword(!showPassword)}>
                           {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                         </Button>
                       </div>
                     </div>
-                    <Button type="submit" className="w-full h-11 shadow-lg hover:shadow-primary/25 transition-all font-semibold capitalize mt-2 text-base" disabled={isLoading}>
+                    <Button type="submit" className="w-full h-11 bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg hover:shadow-indigo-500/20 transition-all font-semibold capitalize mt-2 text-base" disabled={isLoading}>
                       {isLoading ? 'Processing...' : `Login as ${selectedRole}`}
                     </Button>
                   </form>
@@ -285,120 +300,120 @@ const AuthPage = () => {
                   {/* Conditionally render based on role to avoid confusion */}
                   {selectedRole === 'student' ? (
                     <form onSubmit={handleStudentSignup} className="space-y-3">
-                      <div className="space-y-1"><Label>Full Name</Label><Input value={studentName} onChange={e => setStudentName(e.target.value)} required className="h-10" /></div>
-                      <div className="space-y-1"><Label>Student ID (Roll)</Label><Input value={studentId} onChange={e => setStudentId(e.target.value)} required placeholder="e.g. 253-35-108" className="h-10" /></div>
-                      <div className="space-y-1"><Label>Email</Label><Input type="email" value={studentEmail} onChange={e => setStudentEmail(e.target.value)} required className="h-10" /></div>
+                      <div className="space-y-1"><Label className="text-gray-300">Full Name</Label><Input value={studentName} onChange={e => setStudentName(e.target.value)} required className="h-10 border-white/10 bg-white/5 text-white placeholder:text-gray-500" /></div>
+                      <div className="space-y-1"><Label className="text-gray-300">Student ID (Roll)</Label><Input value={studentId} onChange={e => setStudentId(e.target.value)} required placeholder="e.g. 253-35-108" className="h-10 border-white/10 bg-white/5 text-white placeholder:text-gray-500" /></div>
+                      <div className="space-y-1"><Label className="text-gray-300">Email</Label><Input type="email" value={studentEmail} onChange={e => setStudentEmail(e.target.value)} required className="h-10 border-white/10 bg-white/5 text-white placeholder:text-gray-500" /></div>
 
                       <div className="space-y-1">
-                        <Label>Password</Label>
+                        <Label className="text-gray-300">Password</Label>
                         <div className="relative">
-                          <Input type={showPassword ? "text" : "password"} value={studentPassword} onChange={e => setStudentPassword(e.target.value)} required className="h-10" />
-                          <Button type="button" variant="ghost" size="icon" className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent" onClick={() => setShowPassword(!showPassword)}>
+                          <Input type={showPassword ? "text" : "password"} value={studentPassword} onChange={e => setStudentPassword(e.target.value)} required className="h-10 border-white/10 bg-white/5 text-white placeholder:text-gray-500" />
+                          <Button type="button" variant="ghost" size="icon" className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent text-gray-400 hover:text-white" onClick={() => setShowPassword(!showPassword)}>
                             {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                           </Button>
                         </div>
                       </div>
 
                       <div className="space-y-1">
-                        <Label>Confirm Password</Label>
-                        <Input type={showPassword ? "text" : "password"} value={studentConfirmPassword} onChange={e => setStudentConfirmPassword(e.target.value)} required className="h-10" />
+                        <Label className="text-gray-300">Confirm Password</Label>
+                        <Input type={showPassword ? "text" : "password"} value={studentConfirmPassword} onChange={e => setStudentConfirmPassword(e.target.value)} required className="h-10 border-white/10 bg-white/5 text-white placeholder:text-gray-500" />
                       </div>
 
                       <div className="space-y-1">
-                        <Label>Department</Label>
+                        <Label className="text-gray-300">Department</Label>
                         <Select value={studentFaculty} onValueChange={setStudentFaculty}>
-                          <SelectTrigger className="h-10"><SelectValue placeholder="Select Dept" /></SelectTrigger>
-                          <SelectContent>
-                            {faculties.map(f => <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>)}
+                          <SelectTrigger className="h-10 border-white/10 bg-white/5 text-white"><SelectValue placeholder="Select Dept" /></SelectTrigger>
+                          <SelectContent className="bg-slate-900 border-white/10 text-white">
+                            {faculties.map(f => <SelectItem key={f.id} value={f.id} className="hover:bg-white/5">{f.name}</SelectItem>)}
                           </SelectContent>
                         </Select>
                       </div>
 
                       <div className="grid grid-cols-2 gap-2">
                         <div className="space-y-1">
-                          <Label>Batch</Label>
+                          <Label className="text-gray-300">Batch</Label>
                           <Select value={studentBatch} onValueChange={setStudentBatch} disabled={!studentFaculty}>
-                            <SelectTrigger className="h-10"><SelectValue placeholder="Batch" /></SelectTrigger>
-                            <SelectContent>
+                            <SelectTrigger className="h-10 border-white/10 bg-white/5 text-white"><SelectValue placeholder="Batch" /></SelectTrigger>
+                            <SelectContent className="bg-slate-900 border-white/10 text-white">
                               {getBatchesForFaculty(studentFaculty).map(b => (
-                                <SelectItem key={b.id} value={b.id}>{b.name} (Sem {b.current_semester})</SelectItem>
+                                <SelectItem key={b.id} value={b.id} className="hover:bg-white/5">{b.name} (Sem {b.current_semester})</SelectItem>
                               ))}
                             </SelectContent>
                           </Select>
                         </div>
                         <div className="space-y-1">
-                          <Label>Section</Label>
+                          <Label className="text-gray-300">Section</Label>
                           <Select value={studentSection} onValueChange={setStudentSection} disabled={!studentBatch}>
-                            <SelectTrigger className="h-10"><SelectValue placeholder="Sec" /></SelectTrigger>
-                            <SelectContent>
-                              {getSectionsForBatch(studentBatch).map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                            <SelectTrigger className="h-10 border-white/10 bg-white/5 text-white"><SelectValue placeholder="Sec" /></SelectTrigger>
+                            <SelectContent className="bg-slate-900 border-white/10 text-white">
+                              {getSectionsForBatch(studentBatch).map(s => <SelectItem key={s.id} value={s.id} className="hover:bg-white/5">{s.name}</SelectItem>)}
                             </SelectContent>
                           </Select>
                         </div>
                       </div>
 
-                      <Button type="submit" className="w-full mt-4 h-11 shadow-lg hover:shadow-primary/25 transition-all font-semibold capitalize text-base" disabled={isLoading || isDataLoading}>
+                      <Button type="submit" className="w-full mt-4 h-11 bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg hover:shadow-indigo-500/20 transition-all font-semibold capitalize text-base" disabled={isLoading || isDataLoading}>
                         {isLoading ? 'Creating Account...' : `Sign Up as Student`}
                       </Button>
                     </form>
                   ) : (
                     <form onSubmit={handleTeacherSignup} className="space-y-3">
-                      <div className="space-y-1"><Label>Full Name</Label><Input value={teacherName} onChange={e => setTeacherName(e.target.value)} required className="h-10" /></div>
-                      <div className="space-y-1"><Label>Email</Label><Input type="email" value={teacherEmail} onChange={e => setTeacherEmail(e.target.value)} required className="h-10" /></div>
+                      <div className="space-y-1"><Label className="text-gray-300">Full Name</Label><Input value={teacherName} onChange={e => setTeacherName(e.target.value)} required className="h-10 border-white/10 bg-white/5 text-white placeholder:text-gray-500" /></div>
+                      <div className="space-y-1"><Label className="text-gray-300">Email</Label><Input type="email" value={teacherEmail} onChange={e => setTeacherEmail(e.target.value)} required className="h-10 border-white/10 bg-white/5 text-white placeholder:text-gray-500" /></div>
 
                       <div className="space-y-1">
-                        <Label>Password</Label>
+                        <Label className="text-gray-300">Password</Label>
                         <div className="relative">
-                          <Input type={showPassword ? "text" : "password"} value={teacherPassword} onChange={e => setTeacherPassword(e.target.value)} required className="h-10" />
-                          <Button type="button" variant="ghost" size="icon" className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent" onClick={() => setShowPassword(!showPassword)}>
+                          <Input type={showPassword ? "text" : "password"} value={teacherPassword} onChange={e => setTeacherPassword(e.target.value)} required className="h-10 border-white/10 bg-white/5 text-white placeholder:text-gray-500" />
+                          <Button type="button" variant="ghost" size="icon" className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent text-gray-400 hover:text-white" onClick={() => setShowPassword(!showPassword)}>
                             {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                           </Button>
                         </div>
                       </div>
 
                       <div className="space-y-1">
-                        <Label>Confirm Password</Label>
-                        <Input type={showPassword ? "text" : "password"} value={teacherConfirmPassword} onChange={e => setTeacherConfirmPassword(e.target.value)} required className="h-10" />
+                        <Label className="text-gray-300">Confirm Password</Label>
+                        <Input type={showPassword ? "text" : "password"} value={teacherConfirmPassword} onChange={e => setTeacherConfirmPassword(e.target.value)} required className="h-10 border-white/10 bg-white/5 text-white placeholder:text-gray-500" />
                       </div>
 
                       <div className="space-y-1">
-                        <Label>Department</Label>
+                        <Label className="text-gray-300">Department</Label>
                         <Select value={teacherFaculty} onValueChange={setTeacherFaculty}>
-                          <SelectTrigger className="h-10"><SelectValue placeholder="Select Dept" /></SelectTrigger>
-                          <SelectContent>
-                            {faculties.map(f => <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>)}
+                          <SelectTrigger className="h-10 border-white/10 bg-white/5 text-white"><SelectValue placeholder="Select Dept" /></SelectTrigger>
+                          <SelectContent className="bg-slate-900 border-white/10 text-white">
+                            {faculties.map(f => <SelectItem key={f.id} value={f.id} className="hover:bg-white/5">{f.name}</SelectItem>)}
                           </SelectContent>
                         </Select>
                       </div>
 
-                      <div className="border p-4 rounded-xl space-y-3 bg-muted/30 border-dashed border-primary/20">
-                        <Label className="text-xs font-bold uppercase text-muted-foreground tracking-widest text-center block">Access Assignments</Label>
+                      <div className="border p-4 rounded-xl space-y-3 bg-white/5 border-dashed border-white/10">
+                        <Label className="text-xs font-bold uppercase text-gray-400 tracking-widest text-center block">Access Assignments</Label>
                         <div className="grid grid-cols-2 gap-2">
                           <Select value={currentAssignment.batchId} onValueChange={v => setCurrentAssignment({ ...currentAssignment, batchId: v })}>
-                            <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Batch" /></SelectTrigger>
-                            <SelectContent>{batches.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}</SelectContent>
+                            <SelectTrigger className="h-9 text-xs border-white/10 bg-white/5 text-white"><SelectValue placeholder="Batch" /></SelectTrigger>
+                            <SelectContent className="bg-slate-900 border-white/10 text-white">{batches.map(b => <SelectItem key={b.id} value={b.id} className="hover:bg-white/5">{b.name}</SelectItem>)}</SelectContent>
                           </Select>
                           <Select value={currentAssignment.sectionId} onValueChange={v => setCurrentAssignment({ ...currentAssignment, sectionId: v })}>
-                            <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Section" /></SelectTrigger>
-                            <SelectContent>{getSectionsForBatch(currentAssignment.batchId).map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}</SelectContent>
+                            <SelectTrigger className="h-9 text-xs border-white/10 bg-white/5 text-white"><SelectValue placeholder="Section" /></SelectTrigger>
+                            <SelectContent className="bg-slate-900 border-white/10 text-white">{getSectionsForBatch(currentAssignment.batchId).map(s => <SelectItem key={s.id} value={s.id} className="hover:bg-white/5">{s.name}</SelectItem>)}</SelectContent>
                           </Select>
                         </div>
                         <Select value={currentAssignment.subjectId} onValueChange={v => setCurrentAssignment({ ...currentAssignment, subjectId: v })}>
-                          <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Subject" /></SelectTrigger>
-                          <SelectContent>
-                            {catalogSubjects.map(s => <SelectItem key={s.id} value={s.id}>{s.subject_name}</SelectItem>)}
+                          <SelectTrigger className="h-9 text-xs border-white/10 bg-white/5 text-white"><SelectValue placeholder="Subject" /></SelectTrigger>
+                          <SelectContent className="bg-slate-900 border-white/10 text-white">
+                            {catalogSubjects.map(s => <SelectItem key={s.id} value={s.id} className="hover:bg-white/5">{s.subject_name}</SelectItem>)}
                           </SelectContent>
                         </Select>
-                        <Button type="button" size="sm" variant="secondary" className="w-full h-8 text-xs font-bold" onClick={addAssignment} disabled={!currentAssignment.subjectId}>Add to Schedule</Button>
+                        <Button type="button" size="sm" variant="secondary" className="w-full h-8 text-xs font-bold bg-white/10 hover:bg-white/20 text-white border-none" onClick={addAssignment} disabled={!currentAssignment.subjectId}>Add to Schedule</Button>
 
                         {teacherAssignments.length > 0 && (
-                          <div className="text-[10px] text-primary font-bold uppercase tracking-widest mt-1 text-center bg-primary/10 py-1 rounded">
+                          <div className="text-[10px] text-indigo-400 font-bold uppercase tracking-widest mt-1 text-center bg-indigo-500/10 py-1 rounded">
                             {teacherAssignments.length} Assignments Added
                           </div>
                         )}
                       </div>
 
-                      <Button type="submit" className="w-full mt-4 h-11 shadow-lg hover:shadow-primary/25 transition-all font-semibold capitalize text-base" disabled={isLoading || isDataLoading}>
+                      <Button type="submit" className="w-full mt-4 h-11 bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg hover:shadow-indigo-500/20 transition-all font-semibold capitalize text-base" disabled={isLoading || isDataLoading}>
                         {isLoading ? 'Creating Account...' : `Sign Up as Teacher`}
                       </Button>
                     </form>
