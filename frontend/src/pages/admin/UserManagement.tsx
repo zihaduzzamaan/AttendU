@@ -174,6 +174,24 @@ const UserManagement = () => {
                                                     <DropdownMenuItem onClick={() => toggleStatus(student.id, 'student', student.is_active)}>
                                                         {student.is_active ? 'Disable Account' : 'Enable Account'}
                                                     </DropdownMenuItem>
+                                                    {student.face_registered && (
+                                                        <DropdownMenuItem
+                                                            className="text-rose-500 focus:text-rose-500"
+                                                            onClick={async () => {
+                                                                if (confirm(`Are you sure you want to reset the face data for ${student.profile?.name}? They will need to register again.`)) {
+                                                                    try {
+                                                                        await api.resetStudentFace(student.id);
+                                                                        toast({ title: "Success", description: "Face data reset successfully." });
+                                                                        fetchData();
+                                                                    } catch (e) {
+                                                                        toast({ title: "Error", description: "Failed to reset face data", variant: "destructive" });
+                                                                    }
+                                                                }
+                                                            }}
+                                                        >
+                                                            Reset Face Identity
+                                                        </DropdownMenuItem>
+                                                    )}
                                                 </DropdownMenuContent>
                                             </DropdownMenu>
                                         </TableCell>

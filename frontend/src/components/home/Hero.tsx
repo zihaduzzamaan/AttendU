@@ -1,6 +1,6 @@
 import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
-import { Github, Twitter, Linkedin } from "lucide-react";
+import { Github, Facebook, Linkedin } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export default function Hero() {
@@ -52,21 +52,69 @@ export default function Hero() {
 
             {/* Footer - Integrated */}
             <div className="absolute bottom-0 left-0 right-0 z-10 border-t border-white/10 bg-black/50 px-4 py-3 backdrop-blur-sm sm:px-6 sm:py-4">
-                <div className="mx-auto flex max-w-7xl items-center justify-between">
+                <div className="mx-auto grid max-w-7xl grid-cols-1 items-center gap-4 sm:grid-cols-3">
                     {/* Left - Copyright */}
-                    <p className="text-xs text-gray-500 sm:text-sm">
-                        © {new Date().getFullYear()} AttendU. All rights reserved.
-                    </p>
+                    <div className="order-2 text-center sm:order-1 sm:text-left">
+                        <p className="text-[10px] text-gray-500 sm:text-xs">
+                            © {new Date().getFullYear()} AttendU. All rights reserved.
+                        </p>
+                    </div>
+
+                    {/* Center - Credits */}
+                    <div className="order-1 flex items-center justify-center gap-2 sm:order-2">
+                        <span className="text-[10px] font-medium tracking-wider uppercase text-gray-500 sm:text-[11px]">
+                            Developed by
+                        </span>
+                        <motion.a
+                            href="https://www.facebook.com/zeeshanzeehad/"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            initial={{ opacity: 0.5 }}
+                            animate={{
+                                opacity: [0.8, 1, 0.8],
+                                textShadow: [
+                                    "0 0 4px rgba(99, 102, 241, 0.2)",
+                                    "0 0 15px rgba(99, 102, 241, 0.8)",
+                                    "0 0 4px rgba(99, 102, 241, 0.2)"
+                                ],
+                                scale: [1, 1.05, 1]
+                            }}
+                            transition={{
+                                duration: 3,
+                                repeat: Infinity,
+                                ease: "easeInOut"
+                            }}
+                            className="text-[12px] font-black tracking-widest uppercase text-white sm:text-[14px] cursor-pointer"
+                            style={{ fontFamily: "'Outfit', sans-serif" }}
+                        >
+                            Zihad <span className="text-indigo-400 drop-shadow-[0_0_8px_rgba(99,102,241,0.5)]">(The dev)</span>
+                        </motion.a>
+                    </div>
 
                     {/* Right - Social Links */}
-                    <div className="flex items-center gap-3 sm:gap-4">
-                        <a href="#" className="text-gray-500 transition-colors hover:text-white">
+                    <div className="order-3 flex items-center justify-center gap-6 sm:justify-end">
+                        <a
+                            href="https://github.com/zeehadzeeshan"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-gray-500 transition-all duration-300 hover:text-white hover:scale-110"
+                        >
                             <Github className="h-4 w-4 sm:h-5 sm:w-5" />
                         </a>
-                        <a href="#" className="text-gray-500 transition-colors hover:text-white">
-                            <Twitter className="h-4 w-4 sm:h-5 sm:w-5" />
+                        <a
+                            href="https://www.facebook.com/zeeshanzeehad/"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-gray-500 transition-all duration-300 hover:text-white hover:scale-110"
+                        >
+                            <Facebook className="h-4 w-4 sm:h-5 sm:w-5" />
                         </a>
-                        <a href="#" className="text-gray-500 transition-colors hover:text-white">
+                        <a
+                            href="https://www.linkedin.com/in/md-zihaduzzaman"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-gray-500 transition-all duration-300 hover:text-white hover:scale-110"
+                        >
                             <Linkedin className="h-4 w-4 sm:h-5 sm:w-5" />
                         </a>
                     </div>

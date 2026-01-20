@@ -51,11 +51,30 @@ const FaceRegistration = () => {
   };
 
   useEffect(() => {
-    if (!user || role !== 'student') {
-      navigate('/');
-    } else if ((user as any).face_registered && !isUpdateMode) {
-      navigate('/student/attendance');
-    }
+    const checkRegistration = async () => {
+      if (!user || role !== 'student') {
+        navigate('/');
+        return;
+      }
+
+      // 1. Immediate local check from context
+      if ((user as any)?.face_registered && !isUpdateMode) {
+        setStage('already-registered' as any);
+        return;
+      }
+
+      // 2. Real-time server check for fresh state
+      try {
+        const studentData = await api.getStudentByProfileId(user.id);
+        if (studentData?.face_registered && !isUpdateMode) {
+          setStage('already-registered' as any);
+        }
+      } catch (e) {
+        console.error("Failed to verify registration status:", e);
+      }
+    };
+
+    checkRegistration();
   }, [user, role, navigate, isUpdateMode]);
 
   // Load Models for visual feedback only
@@ -473,7 +492,7 @@ const FaceRegistration = () => {
   };
 
   const handleComplete = () => {
-    navigate('/student/attendance');
+    window.location.href = '/student/attendance';
   };
 
   const handleRetry = () => {
@@ -602,6 +621,29 @@ const FaceRegistration = () => {
                 <p className="text-sm text-gray-400 mb-6">We couldn't verify your face. Please try again in better lighting.</p>
                 <Button onClick={handleRetry} className="bg-white/10 hover:bg-white/20 text-white border border-white/20">
                   Try Again
+                </Button>
+              </div>
+            )}
+
+            {(stage as string) === 'already-registered' && (
+              <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black/95 backdrop-blur-md animate-fade-in p-8 text-center">
+                <div className="relative mb-6">
+                  <div className="absolute inset-0 bg-cyan-500/20 blur-[40px] rounded-full" />
+                  <ShieldCheck className="w-20 h-20 text-cyan-400 relative z-10" />
+                </div>
+                <h2 className="text-2xl font-black text-white mb-3">Identity Locked</h2>
+                <p className="text-gray-400 mb-8 leading-relaxed max-w-xs">
+                  Your face biometric is already registered in the system.
+                  <br /><br />
+                  <span className="text-amber-500/80 text-xs font-bold uppercase tracking-widest">Security Notice</span>
+                  <br />
+                  To prevent identity fraud, you cannot re-register yourself. Please contact your <b>Department Admin</b> to reset your face ID.
+                </p>
+                <Button
+                  onClick={() => navigate('/student/attendance')}
+                  className="w-full max-w-[240px] bg-white text-black hover:bg-gray-200 font-bold h-12 rounded-xl"
+                >
+                  Return to Dashboard
                 </Button>
               </div>
             )}

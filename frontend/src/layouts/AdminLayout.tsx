@@ -37,8 +37,11 @@ const AdminLayout = () => {
 
     const SidebarContent = ({ mobile = false }) => (
         <>
-            <div className="h-16 border-b border-border flex items-center px-6">
-                <span className="text-lg font-bold tracking-tight truncate">University Admin</span>
+            <div className="h-20 border-b border-border flex items-center px-6">
+                <div>
+                    <h1 className="font-black text-xl tracking-tight leading-none text-foreground">AttendU</h1>
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Admin Portal</span>
+                </div>
             </div>
 
             <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
@@ -110,12 +113,14 @@ const AdminLayout = () => {
                     </div>
 
                     <div className="flex items-center gap-3">
-                        <div className="text-right hidden md:block">
-                            <p className="text-sm font-medium leading-none truncate max-w-[150px]">{user?.name || 'Administrator'}</p>
-                            <p className="text-xs text-muted-foreground mt-1">Super Admin</p>
-                        </div>
-                        <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-primary/10 flex items-center justify-center border border-border shrink-0">
-                            <User className="w-4 h-4 sm:w-5 sm:h-5 text-primary" />
+                        <div className="h-auto py-1 px-3 bg-slate-50/50 rounded-xl flex items-center gap-3 border border-slate-100/50">
+                            <div className="text-right hidden md:block">
+                                <p className="text-sm font-black text-slate-800 leading-none truncate max-w-[150px]">{user?.name || 'Administrator'}</p>
+                                <p className="text-[10px] font-bold text-slate-400 uppercase mt-1">Management</p>
+                            </div>
+                            <div className="w-8 h-8 rounded-lg bg-white border border-slate-100 flex items-center justify-center text-slate-400 shrink-0">
+                                <User className="w-4 h-4" />
+                            </div>
                         </div>
                     </div>
                 </header>

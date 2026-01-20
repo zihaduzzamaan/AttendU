@@ -23,8 +23,8 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Footer } from '@/components/ui/Footer';
+import { toast } from 'sonner';
 
 const StudentLayout = () => {
     const { logout, user } = useAuth();
@@ -34,6 +34,17 @@ const StudentLayout = () => {
     const handleLogout = () => {
         logout();
         navigate('/');
+    };
+
+    const handleFaceRegistrationNavigation = () => {
+        if ((user as any)?.face_registered) {
+            toast.error("Identity Already Registered", {
+                description: "Your face biometric is already locked in our system. Please contact your Department Admin to reset your identity if needed.",
+                duration: 5000,
+            });
+            return;
+        }
+        navigate('/face-registration?mode=update');
     };
 
     const navItems = [
@@ -59,14 +70,9 @@ const StudentLayout = () => {
             {/* Desktop Sidebar */}
             <aside className="hidden lg:flex fixed left-0 top-0 z-40 h-screen w-72 border-r border-slate-200 bg-white flex-col shadow-[1px_0_10px_rgba(0,0,0,0.02)]">
                 <div className="flex h-20 items-center px-8 border-b border-slate-100">
-                    <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center shadow-lg shadow-primary/20 transition-transform hover:scale-105">
-                            <GraduationCap className="w-6 h-6 text-white" />
-                        </div>
-                        <div>
-                            <h1 className="font-black text-xl tracking-tight text-slate-800 leading-none">AttendU</h1>
-                            <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Student Portal</span>
-                        </div>
+                    <div>
+                        <h1 className="font-black text-xl tracking-tight text-slate-800 leading-none">AttendU</h1>
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Student Portal</span>
                     </div>
                 </div>
 
@@ -95,7 +101,7 @@ const StudentLayout = () => {
                         <Button
                             variant="outline"
                             className="w-full justify-start rounded-xl border-slate-200 text-slate-600 hover:bg-slate-50 hover:border-primary/20 group transition-all"
-                            onClick={() => navigate('/face-registration?mode=update')}
+                            onClick={handleFaceRegistrationNavigation}
                         >
                             <ScanFace className="w-4 h-4 mr-2 text-slate-400 group-hover:text-primary" />
                             Update Scan
@@ -119,10 +125,7 @@ const StudentLayout = () => {
             <main className="flex-1 lg:ml-72 w-full pb-24 lg:pb-0">
                 {/* Modern Header */}
                 <header className="sticky top-0 z-30 flex h-20 items-center justify-between bg-white/80 backdrop-blur-md border-b border-slate-100 px-4 sm:px-10 shadow-sm">
-                    <div className="lg:hidden flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-lg bg-primary flex items-center justify-center shadow-lg shadow-primary/20">
-                            <GraduationCap className="w-5 h-5 text-white" />
-                        </div>
+                    <div className="lg:hidden flex items-center">
                         <h1 className="font-bold text-lg text-slate-800">AttendU</h1>
                     </div>
 
@@ -143,15 +146,14 @@ const StudentLayout = () => {
 
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" className="p-0 hover:bg-transparent flex items-center gap-3">
+                                <Button variant="ghost" className="h-auto py-2 px-3 hover:bg-slate-50 rounded-xl flex items-center gap-3 border border-transparent hover:border-slate-100 transition-all">
                                     <div className="text-right hidden sm:block">
                                         <p className="text-sm font-black text-slate-800 leading-none">{user?.name}</p>
-                                        <p className="text-[10px] font-bold text-slate-400 uppercase mt-1 tracking-wider">Student</p>
+                                        <p className="text-[10px] font-bold text-slate-400 uppercase mt-1 tracking-wider">Student Account</p>
                                     </div>
-                                    <Avatar className="h-10 w-10 border-2 border-white shadow-sm ring-1 ring-slate-100 transition-transform hover:scale-105">
-                                        <AvatarImage src="" />
-                                        <AvatarFallback className="bg-primary/10 text-primary font-bold">{user?.name?.charAt(0)}</AvatarFallback>
-                                    </Avatar>
+                                    <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-400">
+                                        <User className="w-4 h-4" />
+                                    </div>
                                 </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" className="w-56 rounded-2xl border-slate-100 shadow-xl p-2">
@@ -159,7 +161,7 @@ const StudentLayout = () => {
                                 <DropdownMenuItem className="rounded-xl cursor-pointer py-2.5" onClick={() => navigate('/student/profile')}>
                                     <User className="mr-2 h-4 w-4" /> Profile
                                 </DropdownMenuItem>
-                                <DropdownMenuItem className="rounded-xl cursor-pointer py-2.5" onClick={() => navigate('/face-registration?mode=update')}>
+                                <DropdownMenuItem className="rounded-xl cursor-pointer py-2.5" onClick={handleFaceRegistrationNavigation}>
                                     <ScanFace className="mr-2 h-4 w-4" /> Face Scan
                                 </DropdownMenuItem>
                                 <DropdownMenuSeparator className="my-2 bg-slate-50" />
@@ -205,7 +207,7 @@ const StudentLayout = () => {
 
                 <div className="relative -top-6">
                     <button
-                        onClick={() => navigate('/face-registration?mode=update')}
+                        onClick={handleFaceRegistrationNavigation}
                         className="w-12 h-12 bg-primary rounded-xl shadow-xl shadow-primary/40 flex items-center justify-center text-white active:scale-95 transition-transform"
                     >
                         <ScanFace className="w-7 h-7" />

@@ -278,6 +278,21 @@ export const api = {
     if (error) throw error;
   },
 
+  resetStudentFace: async (studentId: string) => {
+    const { error } = await supabase
+      .from('students')
+      .update({
+        face_registered: false,
+        face_embedding: null
+      })
+      .eq('id', studentId);
+
+    if (error) throw error;
+
+    // Trigger backend sync so the face is removed from the recognition index
+    await api.syncFaces();
+  },
+
   // Routines
   getRoutines: async (filters?: { teacher_id?: string; section_id?: string; day?: string }) => {
     let query = supabase.from('routines').select(`

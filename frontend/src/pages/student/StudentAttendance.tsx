@@ -1,3 +1,4 @@
+import { AnimatePresence, motion } from "framer-motion";
 import { useState, useEffect, useMemo } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { api } from "@/services/api";
@@ -13,7 +14,8 @@ import {
     Clock,
     ArrowUpRight,
     Award,
-    Layers
+    Layers,
+    ChevronDown
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -28,6 +30,7 @@ const StudentAttendance = () => {
         return cached ? JSON.parse(cached) : [];
     });
     const [selectedSubject, setSelectedSubject] = useState<any | null>(null);
+    const [expandedId, setExpandedId] = useState<string | null>(null);
 
     // Initial loading should only be true if we don't have cached data
     const [isLoading, setIsLoading] = useState(!history.length);
@@ -125,105 +128,148 @@ const StudentAttendance = () => {
                 </div>
             </div>
 
-            {/* Quick Stats Grid - More Compact */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 px-1 sm:px-4">
+            {/* Quick Stats Grid - Forced Single Row on Mobile */}
+            <div className="grid grid-cols-4 gap-2 sm:gap-4 px-1 sm:px-4">
                 {[
                     { label: 'Attended', value: stats.overallPresent, icon: CheckCircle, color: 'text-emerald-600', bg: 'bg-emerald-50' },
                     { label: 'Missed', value: stats.overallTotal - stats.overallPresent, icon: XCircle, color: 'text-rose-600', bg: 'bg-rose-50' },
                     { label: 'Recordings', value: stats.overallTotal, icon: Calendar, color: 'text-blue-600', bg: 'bg-blue-50' },
-                    { label: 'Active Courses', value: stats.totalSubjects, icon: BookOpen, color: 'text-indigo-600', bg: 'bg-indigo-50' }
+                    { label: 'Courses', value: stats.totalSubjects, icon: BookOpen, color: 'text-indigo-600', bg: 'bg-indigo-50' }
                 ].map((item, idx) => (
-                    <Card key={idx} className="border-none shadow-sm bg-white rounded-2xl group hover:shadow-md transition-all duration-300">
-                        <CardContent className="p-4 flex items-center gap-3">
-                            <div className={`w-11 h-11 ${item.bg} rounded-xl flex items-center justify-center shrink-0`}>
-                                <item.icon className={`w-5 h-5 ${item.color}`} />
+                    <Card key={idx} className="border-none shadow-sm bg-white rounded-xl sm:rounded-2xl group hover:shadow-md transition-all duration-300">
+                        <CardContent className="p-2 sm:p-4 flex flex-col sm:flex-row items-center sm:items-center text-center sm:text-left gap-1 sm:gap-3">
+                            <div className={`w-8 h-8 sm:w-11 sm:h-11 ${item.bg} rounded-lg sm:rounded-xl flex items-center justify-center shrink-0`}>
+                                <item.icon className={`w-4 h-4 sm:w-5 sm:h-5 ${item.color}`} />
                             </div>
-                            <div>
-                                <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">{item.label}</h3>
-                                <div className="text-xl font-black text-slate-900 mt-1">{item.value}</div>
+                            <div className="min-w-0">
+                                <h3 className="text-[7px] sm:text-[10px] font-black text-slate-400 uppercase tracking-tight sm:tracking-widest leading-none truncate">{item.label}</h3>
+                                <div className="text-sm sm:text-xl font-black text-slate-900 mt-0.5 sm:mt-1">{item.value}</div>
                             </div>
                         </CardContent>
                     </Card>
                 ))}
             </div>
 
-            {/* Subject Grid - Reverted to User-Preferred Glassmorphism Style */}
-            <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3 px-1 sm:px-4">
+            {/* Expandable Course List */}
+            <div className="grid gap-3 px-1 sm:px-4">
                 {stats.subjects.map((stat) => (
                     <Card
                         key={stat.subject.id}
-                        className="group relative overflow-hidden bg-white/80 backdrop-blur-sm border-2 border-slate-50 rounded-[2.5rem] transition-all duration-500 hover:shadow-[0_20px_50px_rgba(0,0,0,0.08)] hover:border-primary/30 cursor-pointer shadow-[inset_0_0_20px_rgba(255,255,255,0.5),0_10px_30px_rgba(0,0,0,0.04)]"
-                        onClick={() => setSelectedSubject(stat)}
+                        className={`group relative overflow-hidden bg-white/80 backdrop-blur-sm border-2 transition-all duration-500 rounded-[1.5rem] sm:rounded-[2.5rem] cursor-pointer shadow-sm ${expandedId === stat.subject.id ? 'border-primary/30 shadow-lg' : 'border-slate-50 hover:border-primary/20'
+                            }`}
+                        onClick={() => setExpandedId(expandedId === stat.subject.id ? null : stat.subject.id)}
                     >
-                        {/* Dynamic Gradient Accents */}
-                        <div className="absolute top-0 left-1/4 right-1/4 h-12 bg-emerald-500/30 blur-[40px] rounded-full z-0 group-hover:bg-emerald-400/50 transition-all duration-700" />
-                        <div className={`absolute top-0 right-0 w-32 h-32 -mr-12 -mt-12 rounded-full blur-[60px] opacity-10 transition-all duration-700 group-hover:opacity-30 group-hover:scale-125 ${stat.percentage < 75 ? 'bg-rose-500' : 'bg-primary'}`} />
-
-                        <CardHeader className="p-6 pb-2 relative z-10">
-                            <div className="flex justify-between items-start gap-4">
-                                <CardTitle className="text-2xl font-black tracking-tight text-slate-900 line-clamp-2 min-h-fit sm:min-h-[3.5rem] transition-all duration-500 group-hover:translate-x-1 flex-1">
-                                    {stat.subject.name}
-                                </CardTitle>
-                                <div className="shrink-0 pt-1">
-                                    <Badge className="bg-slate-100 text-slate-600 hover:bg-slate-200 border-none px-3 py-1.5 rounded-xl font-black text-xs tracking-tight shadow-sm transition-colors uppercase">
-                                        {stat.subject.code}
-                                    </Badge>
+                        <CardHeader className="p-4 sm:p-6 relative z-10 transition-all duration-300">
+                            <div className="flex items-center justify-between gap-4">
+                                <div className="flex items-center gap-3 sm:gap-4 flex-1">
+                                    <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl flex items-center justify-center shrink-0 transition-colors ${expandedId === stat.subject.id ? 'bg-primary/10' : 'bg-slate-50'}`}>
+                                        <BookOpen className={`w-5 h-5 sm:w-6 sm:h-6 ${expandedId === stat.subject.id ? 'text-primary' : 'text-slate-400'}`} />
+                                    </div>
+                                    <div className="min-w-0 flex-1">
+                                        <div className="flex items-center gap-2">
+                                            <CardTitle className="text-base sm:text-xl font-black tracking-tight text-slate-900 truncate">
+                                                {stat.subject.name}
+                                            </CardTitle>
+                                            <Badge className="bg-slate-100 text-slate-600 hover:bg-slate-200 border-none px-2 py-0.5 rounded-lg font-black text-[9px] sm:text-[10px] uppercase shrink-0">
+                                                {stat.subject.code}
+                                            </Badge>
+                                        </div>
+                                        <div className="flex items-center gap-2 mt-0.5">
+                                            <span className={`text-[10px] font-black uppercase tracking-wider ${stat.percentage < 75 ? 'text-rose-500' : 'text-emerald-600'}`}>
+                                                {stat.percentage}% Attendance
+                                            </span>
+                                            <span className="text-slate-300">•</span>
+                                            <span className="text-[10px] font-bold text-slate-400">{stat.total} Classes</span>
+                                        </div>
+                                    </div>
                                 </div>
+                                <motion.div
+                                    animate={{ rotate: expandedId === stat.subject.id ? 180 : 0 }}
+                                    transition={{ duration: 0.3 }}
+                                    className="shrink-0"
+                                >
+                                    <ChevronDown className={`w-5 h-5 ${expandedId === stat.subject.id ? 'text-primary' : 'text-slate-300'}`} />
+                                </motion.div>
                             </div>
                         </CardHeader>
 
-                        <CardContent className="px-6 pb-2 sm:pb-4 space-y-4 relative z-10">
-                            {/* Refined Progress Bar with Integrated Stats */}
-                            <div className="space-y-2">
-                                <div className="flex justify-between items-end px-1">
-                                    <div className="flex flex-col">
-                                        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 leading-none">Attendance Score</span>
-                                        <div className="flex items-center gap-1.5 mt-1">
-                                            <Badge className={`border-none px-2 py-0.5 font-black text-[12px] rounded-lg shadow-sm transition-all duration-500 ${stat.percentage < 75 ? 'bg-rose-500 text-white' : 'bg-primary text-white'}`}>
-                                                {stat.percentage}%
-                                            </Badge>
-                                            <span className="text-[10px] font-bold text-slate-300">/</span>
-                                            <div className="flex items-center gap-1 bg-slate-50 px-2 py-0.5 rounded-lg border border-slate-100 shadow-inner group-hover:bg-white transition-colors">
-                                                <Award className={`w-3 h-3 ${stat.percentage < 75 ? 'text-rose-400' : 'text-primary'}`} />
-                                                <span className="text-[11px] font-black text-slate-700 tracking-tight">{stat.marks} Pts</span>
+                        <AnimatePresence>
+                            {expandedId === stat.subject.id && (
+                                <motion.div
+                                    initial={{ height: 0, opacity: 0 }}
+                                    animate={{ height: "auto", opacity: 1 }}
+                                    exit={{ height: 0, opacity: 0 }}
+                                    transition={{ duration: 0.4, ease: "easeInOut" }}
+                                >
+                                    <CardContent className="px-4 pb-4 sm:px-6 sm:pb-6 space-y-5 border-t border-slate-50 pt-5 relative z-10">
+                                        {/* Dynamic Gradient Accents */}
+                                        <div className="absolute top-0 left-1/4 right-1/4 h-12 bg-emerald-500/10 blur-[40px] rounded-full -z-10" />
+
+                                        {/* Progress Bar with Integrated Stats */}
+                                        <div className="space-y-2">
+                                            <div className="flex justify-between items-end px-1">
+                                                <div className="flex flex-col">
+                                                    <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 leading-none">Attendance Score</span>
+                                                    <div className="flex items-center gap-1.5 mt-1.5">
+                                                        <Badge className={`border-none px-2 py-0.5 font-black text-[12px] rounded-lg shadow-sm ${stat.percentage < 75 ? 'bg-rose-500 text-white' : 'bg-primary text-white'}`}>
+                                                            {stat.percentage}%
+                                                        </Badge>
+                                                        <span className="text-[10px] font-bold text-slate-300">/</span>
+                                                        <div className="flex items-center gap-1 bg-slate-50 px-2 py-0.5 rounded-lg border border-slate-100">
+                                                            <Award className={`w-3 h-3 ${stat.percentage < 75 ? 'text-rose-400' : 'text-primary'}`} />
+                                                            <span className="text-[11px] font-black text-slate-700 tracking-tight">{stat.marks} Pts</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <Badge variant="outline" className={`text-[10px] font-black uppercase tracking-wider py-1 rounded-full ${stat.percentage < 75 ? 'border-rose-100 text-rose-500 bg-rose-50/30' : 'border-emerald-100 text-emerald-600 bg-emerald-50/30'}`}>
+                                                    {stat.percentage >= 75 ? 'Perfect Standing' : 'Below Requirement'}
+                                                </Badge>
+                                            </div>
+                                            <div className="h-6 bg-slate-50 rounded-2xl p-1 shadow-inner ring-1 ring-slate-100 relative overflow-hidden">
+                                                <motion.div
+                                                    initial={{ width: 0 }}
+                                                    animate={{ width: `${stat.percentage}%` }}
+                                                    transition={{ duration: 1.5, ease: "easeOut" }}
+                                                    className={`h-full rounded-xl shadow-sm ${stat.percentage < 75 ? 'bg-gradient-to-r from-rose-400 to-rose-600 shadow-rose-500/20' : 'bg-gradient-to-r from-primary/60 to-primary shadow-primary/20'}`}
+                                                >
+                                                    <div className="absolute inset-0 bg-[linear-gradient(45deg,rgba(255,255,255,0.2)25%,transparent 25%,transparent 50%,rgba(255,255,255,0.2)50%,rgba(255,255,255,0.2)75%,transparent 75%,transparent)] bg-[length:24px_24px] animate-[shimmer_2s_linear_infinite]" />
+                                                </motion.div>
                                             </div>
                                         </div>
-                                    </div>
-                                    <span className={`text-[10px] font-black uppercase tracking-wider ${stat.percentage < 75 ? 'text-rose-500' : 'text-emerald-600'}`}>
-                                        {stat.percentage >= 75 ? 'Perfect' : 'Action Needed'}
-                                    </span>
-                                </div>
-                                <div className="h-6 bg-slate-50 rounded-2xl p-1 shadow-inner ring-1 ring-slate-100 group-hover:ring-primary/10 transition-all relative overflow-hidden">
-                                    <div
-                                        className={`h-full rounded-xl transition-all duration-[1.5s] ease-out shadow-sm ${stat.percentage < 75 ? 'bg-gradient-to-r from-rose-400 to-rose-600 shadow-rose-500/20' : 'bg-gradient-to-r from-primary/60 to-primary shadow-primary/20'}`}
-                                        style={{ width: `${stat.percentage}%` }}
-                                    >
-                                        <div className="absolute inset-0 bg-[linear-gradient(45deg,rgba(255,255,255,0.2)25%,transparent 25%,transparent 50%,rgba(255,255,255,0.2)50%,rgba(255,255,255,0.2)75%,transparent 75%,transparent)] bg-[length:24px_24px] animate-[shimmer_2s_linear_infinite]" />
-                                    </div>
-                                </div>
-                            </div>
 
-                            {/* Minimal Bento Stats */}
-                            <div className="grid grid-cols-3 gap-4">
-                                {[
-                                    { val: stat.total, sub: 'Classes', color: 'text-slate-800', bg: 'bg-slate-50' },
-                                    { val: stat.present, sub: 'Attended', color: 'text-emerald-600', bg: 'bg-emerald-50/50' },
-                                    { val: stat.absent, sub: 'Missed', color: 'text-rose-500', bg: 'bg-rose-50/50' }
-                                ].map((m, i) => (
-                                    <div key={i} className={`${m.bg} rounded-[1.5rem] p-4 text-center border-2 border-transparent transition-all duration-300 group-hover:bg-white group-hover:border-slate-50 group-hover:shadow-lg`}>
-                                        <div className={`text-xl font-black ${m.color}`}>{m.val}</div>
-                                        <div className="text-[9px] font-black text-slate-400 uppercase tracking-tighter mt-1">{m.sub}</div>
-                                    </div>
-                                ))}
-                            </div>
+                                        {/* Minimal Bento Stats */}
+                                        <div className="grid grid-cols-3 gap-3">
+                                            {[
+                                                { val: stat.total, sub: 'Classes', color: 'text-slate-800', bg: 'bg-slate-50' },
+                                                { val: stat.present, sub: 'Attended', color: 'text-emerald-600', bg: 'bg-emerald-50/50' },
+                                                { val: stat.absent, sub: 'Missed', color: 'text-rose-500', bg: 'bg-rose-50/50' }
+                                            ].map((m, i) => (
+                                                <div key={i} className={`${m.bg} rounded-2xl p-3 sm:p-4 text-center border border-slate-100/50 transition-all duration-300 hover:shadow-md hover:bg-white`}>
+                                                    <div className={`text-lg sm:text-xl font-black ${m.color}`}>{m.val}</div>
+                                                    <div className="text-[8px] sm:text-[9px] font-black text-slate-400 uppercase tracking-tighter mt-1">{m.sub}</div>
+                                                </div>
+                                            ))}
+                                        </div>
 
-                            <div className="flex items-center justify-between text-[11px] font-black text-primary uppercase tracking-[0.1em] opacity-0 group-hover:opacity-100 transition-all duration-500 translate-y-1 group-hover:translate-y-0 h-0 group-hover:h-8 overflow-hidden">
-                                <span>Analyze Detailed Records</span>
-                                <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-                                    <ArrowUpRight className="w-4 h-4" />
-                                </div>
-                            </div>
-                        </CardContent>
+                                        <div
+                                            className="flex items-center justify-between p-3 rounded-2xl bg-primary/5 hover:bg-primary/10 transition-colors group/btn"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                setSelectedSubject(stat);
+                                            }}
+                                        >
+                                            <div className="flex flex-col">
+                                                <span className="text-[11px] font-black text-primary uppercase tracking-[0.1em]">Analyze Detailed Records</span>
+                                                <span className="text-[9px] text-slate-400 font-bold">View full attendance logs & timestamps</span>
+                                            </div>
+                                            <div className="w-8 h-8 rounded-full bg-primary text-white flex items-center justify-center shadow-lg shadow-primary/30 group-hover/btn:scale-110 transition-transform">
+                                                <ArrowUpRight className="w-4 h-4" />
+                                            </div>
+                                        </div>
+                                    </CardContent>
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
                     </Card>
                 ))}
 

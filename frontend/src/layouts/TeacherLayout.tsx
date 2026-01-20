@@ -19,7 +19,6 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { Footer } from '@/components/ui/Footer';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 
 const TeacherLayout = () => {
@@ -44,14 +43,9 @@ const TeacherLayout = () => {
     const SidebarContent = ({ mobile = false }) => (
         <div className="flex flex-col h-full bg-white text-slate-900">
             <div className="h-20 flex items-center px-8 border-b border-slate-100">
-                <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center shadow-lg shadow-primary/20">
-                        <GraduationCap className="w-6 h-6 text-white" />
-                    </div>
-                    <div>
-                        <h1 className="font-black text-xl tracking-tight leading-none text-slate-900">AttendU</h1>
-                        <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Teacher Portal</span>
-                    </div>
+                <div>
+                    <h1 className="font-black text-xl tracking-tight leading-none text-slate-900">AttendU</h1>
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Teacher Portal</span>
                 </div>
             </div>
 
@@ -150,13 +144,14 @@ const TeacherLayout = () => {
 
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" className="relative h-10 w-10 rounded-full ring-2 ring-white shadow-sm hover:shadow-md transition-all p-0 overflow-hidden">
-                                    <Avatar className="h-full w-full">
-                                        <AvatarImage src="" />
-                                        <AvatarFallback className="bg-primary/10 text-primary font-bold">
-                                            {user?.name?.charAt(0) || 'T'}
-                                        </AvatarFallback>
-                                    </Avatar>
+                                <Button variant="ghost" className="h-auto py-2 px-3 hover:bg-slate-50 rounded-xl flex items-center gap-3 border border-transparent hover:border-slate-100 transition-all">
+                                    <div className="text-right hidden sm:block">
+                                        <p className="text-sm font-black text-slate-800 leading-none">{user?.name || 'Instructor'}</p>
+                                        <p className="text-[10px] font-bold text-slate-400 uppercase mt-1 tracking-wider">Faculty Portal</p>
+                                    </div>
+                                    <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-400">
+                                        <User className="w-4 h-4" />
+                                    </div>
                                 </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent className="w-56 rounded-xl border-slate-100 shadow-xl bg-white" align="end">

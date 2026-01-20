@@ -131,7 +131,7 @@ export const LoadingScreen = () => {
 
       <div className="absolute bottom-10 left-0 w-full text-center">
         <p className="text-[10px] uppercase tracking-[0.4em] text-white/20 font-black">
-          Developed by Zihad (The Dev)
+          Developed by <a href="https://www.facebook.com/zeeshanzeehad/" target="_blank" rel="noopener noreferrer" className="hover:text-indigo-400 transition-colors">Zihad (The Dev)</a>
         </p>
       </div>
     </div>
@@ -435,10 +435,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const completeFaceStore = async (userId: string, embedding?: number[]) => {
     try {
-      let updateData: any = { face_registered: true };
-      if (embedding) updateData.face_embedding = embedding;
+      const updateData: any = {
+        face_registered: true,
+        face_embedding: embedding ? JSON.stringify(embedding) : null
+      };
+
       const { error } = await supabase.from('students').update(updateData).eq('profile_id', userId);
       if (error) throw error;
+
+      // Update local state so the app knows the face is registered
+      if (user && user.id === userId) {
+        const updatedUser = { ...user, face_registered: true };
+        setUser(updatedUser);
+      }
+
       return { success: true };
     } catch (error: any) {
       return { success: false, error: error.message };
