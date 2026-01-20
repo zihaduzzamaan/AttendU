@@ -19,7 +19,7 @@ export default function Hero() {
             />
 
             {/* Main Content - Centered with bottom padding for footer */}
-            <div className="relative z-10 flex h-full w-full flex-col items-center justify-center px-4 pb-24 sm:px-6 sm:pb-20">
+            <div className="relative z-10 flex h-full w-full flex-col items-center justify-center px-4 pb-16 sm:px-6 sm:pb-12">
                 <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -27,14 +27,14 @@ export default function Hero() {
                     className="text-center"
                 >
                     {/* Headline */}
-                    <h1 className="mb-6 text-4xl font-black uppercase leading-tight tracking-tight text-white sm:mb-8 sm:text-5xl md:mb-10 md:text-7xl lg:mb-12 lg:text-8xl xl:text-9xl">
+                    <h1 className="mb-6 text-4xl font-black uppercase leading-[0.9] tracking-tight text-white sm:mb-8 sm:text-5xl md:mb-8 md:text-6xl lg:mb-10 lg:text-7xl xl:text-8xl">
                         Face Recognition
                         <br />
                         Attendance System
                     </h1>
 
                     {/* Description */}
-                    <p className="mx-auto mb-6 max-w-3xl px-2 text-sm leading-relaxed text-gray-400 sm:mb-8 sm:px-4 sm:text-base md:mb-10 md:text-lg lg:mb-12 lg:text-xl lg:leading-relaxed">
+                    <p className="mx-auto mb-6 max-w-2xl px-2 text-sm leading-relaxed text-gray-400 sm:mb-8 sm:px-4 sm:text-base md:mb-8 md:text-base lg:mb-10 lg:text-lg">
                         AI-powered biometric attendance tracking. Instant verification, zero manual entries, complete automation for educational institutions.
                     </p>
 
@@ -42,7 +42,7 @@ export default function Hero() {
                     <Link to="/role-selection" className="mt-2 inline-block sm:mt-3 md:mt-4 lg:mt-6">
                         <Button
                             size="lg"
-                            className="h-11 px-6 text-xs font-bold uppercase tracking-wider hover:bg-indigo-700 sm:h-12 sm:px-8 sm:text-sm md:h-14 md:px-10 md:text-base lg:h-16 lg:px-12 lg:text-lg"
+                            className="h-11 px-6 text-xs font-bold uppercase tracking-wider hover:bg-indigo-700 sm:h-12 sm:px-8 sm:text-sm md:h-13 md:px-10 md:text-base lg:h-14 lg:px-12 lg:text-lg"
                         >
                             Get Started
                         </Button>
