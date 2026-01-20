@@ -1,33 +1,33 @@
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { HashRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AppProvider } from "@/providers/AppProvider";
-import Home from "./pages/Home";
-import RoleSelection from "./pages/RoleSelection";
-import AuthPage from "./pages/AuthPage";
-import AdminLogin from "./pages/AdminLogin";
-import FaceRegistration from "./pages/FaceRegistration";
-import NotFound from "./pages/NotFound";
-import ProtectedRoute from "./components/ProtectedRoute";
-import AdminLayout from "./layouts/AdminLayout";
-import Dashboard from "./pages/admin/Dashboard";
-import AcademicStructure from "./pages/admin/AcademicStructure";
-import UserManagement from "./pages/admin/UserManagement";
-import RoutineManagement from "./pages/admin/RoutineManagement";
-import AttendanceManagement from "./pages/admin/AttendanceManagement";
-import Settings from "./pages/admin/Settings";
-import TeacherLayout from "./layouts/TeacherLayout";
-import TeacherDashboard from "./pages/teacher/TeacherDashboard";
-import Classes from "./pages/teacher/Classes";
-import Routine from "./pages/teacher/Routine";
-import TakeAttendance from "./pages/teacher/TakeAttendance";
-import PastAttendance from "./pages/teacher/PastAttendance";
-import StudentLayout from "./layouts/StudentLayout";
-import StudentAttendance from "./pages/student/StudentAttendance";
-import StudentProfile from "./pages/student/StudentProfile";
-import StudentRoutine from "./pages/student/StudentRoutine";
+import Home from "@/pages/Home";
+import RoleSelection from "@/pages/RoleSelection";
+import AuthPage from "@/pages/AuthPage";
+import AdminLogin from "@/pages/AdminLogin";
+import FaceRegistration from "@/pages/FaceRegistration";
+import NotFound from "@/pages/NotFound";
+import ProtectedRoute from "@/components/ProtectedRoute";
+import AdminLayout from "@/layouts/AdminLayout";
+import Dashboard from "@/pages/admin/Dashboard";
+import AcademicStructure from "@/pages/admin/AcademicStructure";
+import UserManagement from "@/pages/admin/UserManagement";
+import RoutineManagement from "@/pages/admin/RoutineManagement";
+import AttendanceManagement from "@/pages/admin/AttendanceManagement";
+import Settings from "@/pages/admin/Settings";
+import TeacherLayout from "@/layouts/TeacherLayout";
+import TeacherDashboard from "@/pages/teacher/TeacherDashboard";
+import Classes from "@/pages/teacher/Classes";
+import Routine from "@/pages/teacher/Routine";
+import TakeAttendance from "@/pages/teacher/TakeAttendance";
+import PastAttendance from "@/pages/teacher/PastAttendance";
+import StudentLayout from "@/layouts/StudentLayout";
+import StudentAttendance from "@/pages/student/StudentAttendance";
+import StudentProfile from "@/pages/student/StudentProfile";
+import StudentRoutine from "@/pages/student/StudentRoutine";
 
 const App = () => (
   <AppProvider>
-    <BrowserRouter>
+    <HashRouter>
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/role-selection" element={<RoleSelection />} />
@@ -72,7 +72,7 @@ const App = () => (
 
         <Route path="*" element={<NotFound />} />
       </Routes>
-    </BrowserRouter>
+    </HashRouter>
   </AppProvider>
 );
 
