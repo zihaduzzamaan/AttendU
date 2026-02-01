@@ -59,18 +59,24 @@ class ImageEnhancer:
         
         return enhanced_img
 
-    def enhance_if_needed(self, image_np, brightness_threshold=50):
+    def enhance_if_needed(self, image_np, brightness_threshold=40):
         """
         Check image brightness and apply enhancement if it's too dark.
+        Optimized: Uses simple Gamma correction instead of Retinex for speed.
         """
         # Convert to HSV to check brightness (Value channel)
         hsv = cv2.cvtColor(image_np, cv2.COLOR_BGR2HSV)
         v_channel = hsv[:, :, 2]
         avg_brightness = np.mean(v_channel)
         
+        # Only enhance if extremely dark to save 200-300ms
         if avg_brightness < brightness_threshold:
-            print(f"🔦 Low light detected (Brightness: {avg_brightness:.2f}). Applying Retinex enhancement...")
-            return self.apply_retinex(image_np)
+            print(f"🔦 Low light detected ({avg_brightness:.2f}). Applying Gamma Correction...")
+            # Simple Gamma Correction (Fast)
+            gamma = 1.5
+            invGamma = 1.0 / gamma
+            table = np.array([((i / 255.0) ** invGamma) * 255 for i in np.arange(0, 256)]).astype("uint8")
+            return cv2.LUT(image_np, table)
         
         return image_np
 
