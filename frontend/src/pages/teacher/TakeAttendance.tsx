@@ -134,6 +134,39 @@ const TakeAttendance = () => {
     const [facingMode, setFacingMode] = useState<'user' | 'environment'>('environment');
 
     // 📸 Camera Lifecycle Management
+
+    // Helper to stop tracking (visual + logic)
+    const stopTracking = () => {
+        console.log("🛑 Stopping scan");
+        setIsTracking(false);
+        isScanningRef.current = false;
+        processingRef.current = false;
+
+        // Stop Visual Loop
+        if (visualLoopRef.current) {
+            cancelAnimationFrame(visualLoopRef.current);
+        }
+        // Clear Canvas
+        const canvas = canvasRef.current;
+        const ctx = canvas?.getContext('2d');
+        if (canvas && ctx) {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        }
+
+        if (autoStopTimer.current) {
+            clearTimeout(autoStopTimer.current);
+            autoStopTimer.current = null;
+        }
+    };
+
+    const stopDetectionLoop = () => {
+        stopTracking();
+        if (videoRef.current?.srcObject) {
+            const stream = videoRef.current.srcObject as MediaStream;
+            stream.getTracks().forEach(t => t.stop());
+        }
+    };
+
     useEffect(() => {
         let stream: MediaStream | null = null;
         const startCamera = async () => {
@@ -346,6 +379,8 @@ const TakeAttendance = () => {
     const frameTimes = useRef<number[]>([]);
     const frameIdCounter = useRef(0);
 
+    const lastMatchedNameRef = useRef<string | null>(null);
+
     const scanFrame = async () => {
         // 1. Check active state
         if (!isScanningRef.current || !videoRef.current || !videoReady) return;
@@ -388,8 +423,20 @@ const TakeAttendance = () => {
                                 recognizedStudentsRef.current.add(studentId);
                                 newMatches++;
                                 const name = student.profile?.name || "Unknown";
-                                setLastMatchedName(`${name} (${(match.confidence * 100).toFixed(0)}%)`);
-                                setTimeout(() => setLastMatchedName(null), 2000);
+                                const formattedName = `${name} (${(match.confidence * 100).toFixed(0)}%)`;
+                                setLastMatchedName(formattedName);
+                                lastMatchedNameRef.current = formattedName; // Sync Ref
+                                setTimeout(() => {
+                                    setLastMatchedName(null);
+                                    lastMatchedNameRef.current = null;
+                                }, 2000);
+                            }
+                        } else {
+                            // Refresh ref for visual loop even if already tracked
+                            const student = allStudentsRef.current.find(s => String(s.id) === studentId);
+                            if (student) {
+                                const name = student.profile?.name || "Unknown";
+                                lastMatchedNameRef.current = `${name} (${(match.confidence * 100).toFixed(0)}%)`;
                             }
                         }
                     }
@@ -470,14 +517,12 @@ const TakeAttendance = () => {
                             ctx.strokeRect(box.x, box.y, box.width, box.height);
 
                             // 2. Determine Label
-                            // Heuristic: If 1 face & recent match -> Show Name. Else "Scanning"
                             let labelText = "Scanning...";
                             let labelColor = "#22c55e"; // Green
 
-                            // We access the ref directly for the latest match name
-                            // Note: This matches the singleton face assumption
-                            if (resizedDetections.length === 1 && lastMatchedName) {
-                                labelText = lastMatchedName.split('(')[0].trim();
+                            // Use Ref to avoid stale closure
+                            if (lastMatchedNameRef.current) {
+                                labelText = lastMatchedNameRef.current.split('(')[0].trim();
                             }
 
                             // 3. Draw Label (Top Right Corner of Box)
@@ -545,36 +590,7 @@ const TakeAttendance = () => {
         }, 45000);
     };
 
-    const stopTracking = () => {
-        console.log("🛑 Stopping scan");
-        setIsTracking(false);
-        isScanningRef.current = false;
-        processingRef.current = false;
 
-        // Stop Visual Loop
-        if (visualLoopRef.current) {
-            cancelAnimationFrame(visualLoopRef.current);
-        }
-        // Clear Canvas
-        const canvas = canvasRef.current;
-        const ctx = canvas?.getContext('2d');
-        if (canvas && ctx) {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-        }
-
-        if (autoStopTimer.current) {
-            clearTimeout(autoStopTimer.current);
-            autoStopTimer.current = null;
-        }
-    };
-
-    const stopDetectionLoop = () => {
-        stopTracking();
-        if (videoRef.current?.srcObject) {
-            const stream = videoRef.current.srcObject as MediaStream;
-            stream.getTracks().forEach(t => t.stop());
-        }
-    };
 
     const handleStartCamera = async () => {
         if (!selectedAssignmentId) return;
